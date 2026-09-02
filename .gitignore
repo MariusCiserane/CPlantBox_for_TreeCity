@@ -9,3 +9,10 @@
 *.csv
 
 *.devcontainer
+
+/documentation_TreeCity
+/code_razan
+
+*__pycache__
+/code_val/dataset_v1
+/code_val/pilot_v1

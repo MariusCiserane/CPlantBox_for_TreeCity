@@ -3,7 +3,6 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Correction : Forcer l'utilisation d'un miroir de secours et nettoyer les listes
 RUN sed -i 's/archive.ubuntu.com/mirror.init7.net/g' /etc/apt/sources.list && \
     apt-get clean && \
     apt-get update --fix-missing && \
@@ -19,13 +18,13 @@ RUN sed -i 's/archive.ubuntu.com/mirror.init7.net/g' /etc/apt/sources.list && \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Installation des packages Python
-RUN pip3 install --no-cache-dir numpy scipy matplotlib pandas vtk mpi4py pybind11
+# openpyxl : requis par pandas.read_excel() pour lire SoilData_en.xlsx
+RUN pip3 install --no-cache-dir numpy scipy matplotlib pandas vtk mpi4py pybind11 openpyxl rosetta-soil
 
-# Récupération du code source
 WORKDIR /app
-# Récupération du code source ET de tous les sous-modules nécessaires
 RUN git clone --recursive https://github.com/Plant-Root-Soil-Interactions-Modelling/CPlantBox.git .
+
+COPY CPlantBox-master/src /app/src
 
 # Compilation (si nécessaire pour les modules C++)
 RUN cmake . && make install
