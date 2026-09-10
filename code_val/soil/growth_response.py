@@ -5,7 +5,6 @@ import numpy as np
 
 FREE_GROWTH_RESISTANCE_MPA = 0.5
 STOPPED_GROWTH_RESISTANCE_MPA = 2.5
-MINIMUM_MECHANICAL_SCALE = 0.05
 
 FIELD_CAPACITY_SUCTION_CM = 100.0
 WILTING_POINT_SUCTION_CM = 15000.0
@@ -14,10 +13,11 @@ SMALLEST_SUCTION_CM = 1.0
 
 
 def apply_bengough(penetrometer_mpa: np.ndarray) -> np.ndarray:
-    """Mechanical impedance after Bengough et al. (2011): free below 0.5 MPa, stalled above 2.5."""
+    """Mechanical impedance after Bengough et al. (2011): free below 0.5 MPa, stalled above 2.5.
+    """
     span = STOPPED_GROWTH_RESISTANCE_MPA - FREE_GROWTH_RESISTANCE_MPA
     unimpeded = (STOPPED_GROWTH_RESISTANCE_MPA - penetrometer_mpa) / span
-    return np.clip(unimpeded, MINIMUM_MECHANICAL_SCALE, 1.0)
+    return np.clip(unimpeded, 0.0, 1.0)
 
 
 def apply_water_stress(pressure_head_cm: np.ndarray) -> np.ndarray:

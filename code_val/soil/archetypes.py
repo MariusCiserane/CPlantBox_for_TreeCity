@@ -67,5 +67,8 @@ ARCHETYPES = (
 )
 
 
+PIT_SUBSTRATE_ARCHETYPE = _uniform(0, "pit_substrate", SoilHorizon(0.4, 1.15, 0.30, 0.60, 0.12))
+
+
 def find_archetype(identifier: int) -> SoilArchetype:
     return next(archetype for archetype in ARCHETYPES if archetype.identifier == identifier)

@@ -15,6 +15,7 @@ from obstacles.masks import build_obstacle_masks
 from soil.field import apply_road_base_override, build_soil_field
 from soil.growth_response import compute_growth_scale
 from soil.hydraulics import build_pressure_head_field
+from soil.pit import apply_planting_pit, build_pit_mask
 from tree.growth import build_elongation_grid, grow_root_system
 
 VTP_RUNS_PER_CONFIGURATION = 1
@@ -32,7 +33,11 @@ class Example(NamedTuple):
 
 def build_soil_environment(configuration: Configuration, grid: VoxelGrid):
     rng = np.random.default_rng(configuration.soil_noise_seed)
-    field = build_soil_field(configuration.soil, grid, rng)
+    # Pit zoning first, obstacle override on top: the pit is not a protected bubble.
+    field = apply_planting_pit(
+        build_soil_field(configuration.soil, grid, rng),
+        build_soil_field(configuration.pit_soil, grid, rng),
+        build_pit_mask(configuration.pit_radius_cm, configuration.pit_depth_cm, grid))
     masks = build_obstacle_masks(configuration.obstacles, grid)
     field = apply_road_base_override(field, masks.road_base, ROAD_BASE)
     pressure_head = build_pressure_head_field(field)

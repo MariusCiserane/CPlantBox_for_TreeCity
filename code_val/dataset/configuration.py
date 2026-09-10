@@ -7,8 +7,14 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from obstacles.layouts import OBSTACLE_FAMILIES, ObstacleLayout, draw_obstacle_layout
-from soil.archetypes import ARCHETYPES
+from obstacles.layouts import (
+    OBSTACLE_FAMILIES,
+    TREE_PIT_HALF_SIZE_RANGE_CM,
+    ObstacleLayout,
+    draw_obstacle_layout,
+)
+from soil.archetypes import ARCHETYPES, PIT_SUBSTRATE_ARCHETYPE
+from soil.pit import TREE_PIT_DEPTH_RANGE_CM
 from soil.profile import SoilProfile, draw_soil_profile
 from tree.attributes import PICEA_ABIES, TreeAttributes, draw_tree_attributes
 
@@ -22,6 +28,9 @@ ROOT_SEED_STRIDE = 1000
 class Configuration:
     identifier: int
     soil: SoilProfile
+    pit_soil: SoilProfile
+    pit_radius_cm: float
+    pit_depth_cm: float
     obstacles: ObstacleLayout
     tree: TreeAttributes
     soil_noise_seed: int
@@ -42,6 +51,9 @@ def draw_configurations(draws_per_combination: int = DRAWS_PER_COMBINATION, mont
                 configurations.append(Configuration(
                     identifier=identifier,
                     soil=draw_soil_profile(archetype, rng),
+                    pit_soil=draw_soil_profile(PIT_SUBSTRATE_ARCHETYPE, rng),
+                    pit_radius_cm=float(rng.uniform(*TREE_PIT_HALF_SIZE_RANGE_CM)),
+                    pit_depth_cm=float(rng.uniform(*TREE_PIT_DEPTH_RANGE_CM)),
                     obstacles=draw_obstacle_layout(family, rng),
                     tree=draw_tree_attributes(species, rng),
                     soil_noise_seed=int(rng.integers(1, 2 ** 31)),
