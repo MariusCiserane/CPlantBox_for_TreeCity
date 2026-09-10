@@ -1,7 +1,11 @@
 """Expand a soil profile into the five physical channel grids.
 
 A horizon is not uniform in reality, so every channel carries smooth spatial
-noise. That noise is what creates the moisture gradients driving hydrotropism.
+noise. Two noise fields are drawn, one per physical process, and shared by the
+channels that process drives: compaction moves resistance, density and moisture
+together, while textural heterogeneity comes from different fill materials and
+is unrelated to traffic loading. Noising each channel on its own, as before,
+allowed a voxel to be dense, wet and weak at the same time.
 """
 from dataclasses import dataclass, replace
 
@@ -19,6 +23,17 @@ from soil.profile import SoilProfile
 
 NOISE_CORRELATION_VOXELS = 2.0
 NOISE_AMPLITUDE = 0.08
+
+# Penetrometer resistance rises with density and falls with moisture; sand and clay
+# move apart so a patch stays a plausible texture.
+CHANNEL_NOISE_SIGNS = {
+    "penetrometer_mpa": 1.0,
+    "bulk_density_g_cm3": 1.0,
+    "moisture_m3_m3": -1.0,
+    "sand_fraction": 1.0,
+    "clay_fraction": -1.0,
+}
+COMPACTION_CHANNELS = ("penetrometer_mpa", "bulk_density_g_cm3", "moisture_m3_m3")
 
 
 @dataclass(frozen=True)
@@ -47,18 +62,21 @@ def build_topsoil_mask(profile: SoilProfile, grid: VoxelGrid) -> np.ndarray:
     return np.broadcast_to(depths < profile.topsoil_depth_cm, grid.shape)
 
 
-def build_channel(topsoil_value, subsoil_value, topsoil_mask, bounds, rng) -> np.ndarray:
+def build_channel(topsoil_value, subsoil_value, topsoil_mask, bounds, signed_noise) -> np.ndarray:
     base = np.where(topsoil_mask, topsoil_value, subsoil_value)
-    noisy = base * (1.0 + NOISE_AMPLITUDE * build_smooth_noise(base.shape, rng))
+    noisy = base * (1.0 + NOISE_AMPLITUDE * signed_noise)
     return np.clip(noisy, bounds[0], bounds[1]).astype(np.float32)
 
 
 def build_soil_field(profile: SoilProfile, grid: VoxelGrid, rng: np.random.Generator) -> SoilField:
     topsoil_mask = build_topsoil_mask(profile, grid)
+    compaction_noise = build_smooth_noise(grid.shape, rng)
+    texture_noise = build_smooth_noise(grid.shape, rng)
     top, sub = profile.topsoil, profile.subsoil
 
     def channel(attribute, bounds):
-        return build_channel(getattr(top, attribute), getattr(sub, attribute), topsoil_mask, bounds, rng)
+        noise = compaction_noise if attribute in COMPACTION_CHANNELS else texture_noise
+        return build_channel(getattr(top, attribute), getattr(sub, attribute), topsoil_mask, bounds, CHANNEL_NOISE_SIGNS[attribute] * noise)
 
     return SoilField(
         penetrometer_mpa=channel("penetrometer_mpa", PENETROMETER_RANGE_MPA),

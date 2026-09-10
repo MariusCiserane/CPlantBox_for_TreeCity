@@ -885,7 +885,10 @@ double Organ::getLatGrowthDelay(int ot_lat, int st_lat, double dt) const // over
         double ageLN = this->calcAge(getLength(true));                      // theoretical age of root when lateral node is created
         ageLN = std::max(ageLN, age - dt);
         double ageLG = this->calcAge(getLength(true) + effectiveLa); // age of the root, when the lateral starts growing (i.e when the apical zone is developed)
-        growthDelay = ageLG - ageLN;                                 // time the lateral has to wait
+        // Clamped: a soil-slowed root (f_se < 1) has a real age well past its theoretical
+        // age, so ageLG - ageLN goes negative and the lateral is born with a positive age,
+        // which trips the negative-age assertion in Root::calcLength().
+        growthDelay = std::max(ageLG - ageLN, 0.);                   // time the lateral has to wait
         break;
     }
     case Organism::dd_time_lat: { // lateral has to wait for a fixed time (defined by parent organ)

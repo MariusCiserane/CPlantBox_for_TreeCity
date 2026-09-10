@@ -35,7 +35,7 @@ def build_soil_environment(configuration: Configuration, grid: VoxelGrid):
     field = build_soil_field(configuration.soil, grid, rng)
     masks = build_obstacle_masks(configuration.obstacles, grid)
     field = apply_road_base_override(field, masks.road_base, ROAD_BASE)
-    pressure_head = build_pressure_head_field(field.moisture_m3_m3, configuration.soil, grid)
+    pressure_head = build_pressure_head_field(field)
     return field, masks, compute_growth_scale(field.penetrometer_mpa, pressure_head)
 
 

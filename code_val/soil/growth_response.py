@@ -1,7 +1,5 @@
 """Turn soil resistance and water status into the elongation scale CPlantBox reads.
 
-The product of the two responses becomes the f_se grid: CPlantBox multiplies every
-apex elongation step by the value found at the apex position.
 """
 import numpy as np
 
@@ -31,4 +29,5 @@ def apply_water_stress(pressure_head_cm: np.ndarray) -> np.ndarray:
 
 
 def compute_growth_scale(penetrometer_mpa: np.ndarray, pressure_head_cm: np.ndarray) -> np.ndarray:
-    return (apply_bengough(penetrometer_mpa) * apply_water_stress(pressure_head_cm)).astype(np.float32)
+    """ Liebig's law of the minimum: the most limiting factor governs, not the product."""
+    return np.minimum(apply_bengough(penetrometer_mpa),apply_water_stress(pressure_head_cm)).astype(np.float32)
