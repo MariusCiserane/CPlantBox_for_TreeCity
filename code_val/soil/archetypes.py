@@ -67,7 +67,7 @@ ARCHETYPES = (
 )
 
 
-PIT_SUBSTRATE_ARCHETYPE = _uniform(0, "pit_substrate", SoilHorizon(0.4, 1.15, 0.30, 0.60, 0.12))
+PIT_SUBSTRATE_ARCHETYPE = _uniform(0, "pit_substrate", SoilHorizon(1.0, 1.30, 0.30, 0.60, 0.12))
 
 
 def find_archetype(identifier: int) -> SoilArchetype:

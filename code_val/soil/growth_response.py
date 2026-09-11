@@ -10,6 +10,7 @@ FIELD_CAPACITY_SUCTION_CM = 100.0
 WILTING_POINT_SUCTION_CM = 15000.0
 MINIMUM_WATER_SCALE = 0.05
 SMALLEST_SUCTION_CM = 1.0
+MINIMUM_ANGLE_SCALE = 0.35
 
 
 def apply_bengough(penetrometer_mpa: np.ndarray) -> np.ndarray:
@@ -31,3 +32,11 @@ def apply_water_stress(pressure_head_cm: np.ndarray) -> np.ndarray:
 def compute_growth_scale(penetrometer_mpa: np.ndarray, pressure_head_cm: np.ndarray) -> np.ndarray:
     """ Liebig's law of the minimum: the most limiting factor governs, not the product."""
     return np.minimum(apply_bengough(penetrometer_mpa),apply_water_stress(pressure_head_cm)).astype(np.float32)
+
+
+def compute_angle_scale(penetrometer_mpa: np.ndarray) -> np.ndarray:
+    """Insertion angle of a lateral, narrowed by mechanical impedance: a lateral that cannot
+    push sideways emerges closer to its parent's heading.
+    """
+    unimpeded = apply_bengough(penetrometer_mpa)
+    return (MINIMUM_ANGLE_SCALE + (1.0 - MINIMUM_ANGLE_SCALE) * unimpeded).astype(np.float32)

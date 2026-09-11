@@ -16,7 +16,7 @@ from soil.field import apply_road_base_override, build_soil_field
 from soil.growth_response import compute_growth_scale
 from soil.hydraulics import build_pressure_head_field
 from soil.pit import apply_planting_pit, build_pit_mask
-from tree.growth import build_elongation_grid, grow_root_system
+from tree.growth import build_soil_grid, grow_root_system
 
 VTP_RUNS_PER_CONFIGURATION = 1
 VTP_NAME_TEMPLATE = "example_{identifier:04d}_run_{run:02d}.vtp"
@@ -57,7 +57,7 @@ def build_example(configuration: Configuration, grid: VoxelGrid,
     # CPlantBox tropisms hold the geometry through a weak reference, so it has to
     # stay referenced here for the whole Monte Carlo loop.
     geometry = build_growth_geometry(configuration.obstacles, grid)
-    elongation_grid = build_elongation_grid(growth_scale, grid)
+    elongation_grid = build_soil_grid(growth_scale, grid)
 
     occupancies, outside_samples = [], 0
     for run, seed in enumerate(configuration.root_seeds, start=1):

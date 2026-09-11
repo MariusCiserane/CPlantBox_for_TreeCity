@@ -1,8 +1,9 @@
 """Grow one root system in CPlantBox and return its segments.
 
-The soil acts through f_se, the elongation scale CPlantBox reads at every apex.
-It is pushed into a native EquidistantGrid3D so the hot loop stays in C++;
-a Python SoilLookUp subclass would be called once per apex per time step.
+The soil acts through f_se, the elongation scale CPlantBox reads at every apex, and
+optionally through f_sa, the insertion angle scale read once at the birth of each lateral.
+Both are pushed into a native EquidistantGrid3D so the hot loop stays in C++; a Python
+SoilLookUp subclass would be called once per apex per time step.
 """
 from pathlib import Path
 from typing import NamedTuple, Optional
@@ -22,7 +23,7 @@ class RootSystem(NamedTuple):
     subtypes: np.ndarray
 
 
-def build_elongation_grid(growth_scale: np.ndarray, grid: VoxelGrid) -> pb.EquidistantGrid3D:
+def build_soil_grid(values: np.ndarray, grid: VoxelGrid) -> pb.EquidistantGrid3D:
     """CPlantBox maps a coordinate onto n-1 intervals, so the lookup needs one extra node
     per axis to land on exactly the same cells as the voxel grid. Its depth index runs
     upward, hence the flip."""
@@ -32,7 +33,7 @@ def build_elongation_grid(growth_scale: np.ndarray, grid: VoxelGrid) -> pb.Equid
         -grid.depth_cm, 0.0, grid.depth_cells + 1)
 
     padded = np.empty((grid.depth_cells + 1, grid.row_cells + 1, grid.column_cells + 1))
-    padded[:-1, :-1, :-1] = growth_scale[::-1, :, :]
+    padded[:-1, :-1, :-1] = values[::-1, :, :]
     padded[-1, :, :] = padded[-2, :, :]
     padded[:, -1, :] = padded[:, -2, :]
     padded[:, :, -1] = padded[:, :, -2]
@@ -40,9 +41,13 @@ def build_elongation_grid(growth_scale: np.ndarray, grid: VoxelGrid) -> pb.Equid
     return lookup
 
 
-def assign_elongation_grid(plant: pb.Plant, lookup: pb.EquidistantGrid3D) -> None:
+def assign_soil_hooks(plant: pb.Plant, elongation_grid, angle_grid) -> None:
+    """f_sa is left at its default on subType 1: CPlantBox skips it when the parent is the
+    seed, so wiring it there would be silently dead."""
     for parameter in plant.getOrganRandomParameter(pb.OrganTypes.root):
-        parameter.f_se = lookup
+        parameter.f_se = elongation_grid
+        if angle_grid is not None:
+            parameter.f_sa = angle_grid
 
 
 def extract_root_system(plant: pb.Plant) -> RootSystem:
@@ -57,12 +62,13 @@ def extract_root_system(plant: pb.Plant) -> RootSystem:
 
 def grow_root_system(geometry, elongation_grid, seed: int, age_years: float,
                      vtp_path: Optional[Path] = None,
-                     time_step_days: float = TIME_STEP_DAYS) -> RootSystem:
+                     time_step_days: float = TIME_STEP_DAYS,
+                     angle_grid: Optional[pb.EquidistantGrid3D] = None) -> RootSystem:
     plant = pb.Plant()
     plant.readParameters(str(XML_PATH))
     plant.setSeed(seed)
     plant.setGeometry(geometry)
-    assign_elongation_grid(plant, elongation_grid)
+    assign_soil_hooks(plant, elongation_grid, angle_grid)
     plant.initialize(False)
 
     for _ in range(round(age_years * DAYS_PER_YEAR / time_step_days)):
