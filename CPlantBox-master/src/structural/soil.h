@@ -416,6 +416,60 @@ public:
 
 };
 
+
+
+/**
+ * TREECITY SPECIFIC ADDITIONS :
+ * Same grid, read with trilinear interpolation, so the field is continuous
+ *
+ * RectilinearGrid3D is constant per cell and its gradient is therefore zero everywhere. A tropism
+ * compares candidate directions that lie well under a centimetre apart, deep inside a single cell,
+ * so it reads the same value for all of them and the soil cannot steer it. Interpolating restores
+ * a usable gradient without refining the grid.
+ */
+class InterpolatedGrid3D : public EquidistantGrid3D
+{
+public:
+
+    using EquidistantGrid3D::EquidistantGrid3D;
+
+    std::shared_ptr<SoilLookUp> copy() override { return std::make_shared<InterpolatedGrid3D>(*this); }
+
+    double getValue(const Vector3d& pos, const std::shared_ptr<Organ> o = nullptr) const override {
+        Vector3d p = periodic(pos);
+        double wx, wy, wz;
+        size_t i = locate(xgrid, p.x, nx, wx);
+        size_t j = locate(ygrid, p.y, ny, wy);
+        size_t k = locate(zgrid, p.z, nz, wz);
+        double lower = mix(mix(at(i,j,k), at(i+1,j,k), wx), mix(at(i,j+1,k), at(i+1,j+1,k), wx), wy);
+        double upper = mix(mix(at(i,j,k+1), at(i+1,j,k+1), wx), mix(at(i,j+1,k+1), at(i+1,j+1,k+1), wx), wy);
+        return mix(lower, upper, wz);
+    }
+
+    std::string toString() const override { return "InterpolatedGrid3D"; } ///< Quick info about the object for debugging
+
+protected:
+
+    static double mix(double lower, double upper, double weight) { return lower + (upper-lower)*weight; }
+
+    double at(size_t i, size_t j, size_t k) const { return data[k*(nx*ny)+j*nx+i]; }
+
+    /**
+     * Index of the cell centre before x, and the weight towards the next one. Clamping the weight
+     * flattens the field outside the outermost centres, which matches the replicated border the
+     * callers pad their data with.
+     */
+    static size_t locate(const Grid1D* g, double x, size_t n, double& weight) {
+        double spacing = g->grid[1]-g->grid[0];
+        double position = (x-g->grid[0])/spacing - 0.5;
+        double before = std::min(std::max(std::floor(position), 0.), double(n-2)); // clamp before the cast
+        size_t i = size_t(before);
+        weight = std::min(std::max(position-before, 0.), 1.);
+        return i;
+    }
+
+};
+
 } // end namespace CPlantBox
 
 #endif

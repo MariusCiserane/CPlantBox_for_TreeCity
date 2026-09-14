@@ -15,6 +15,10 @@ from grid import VoxelGrid
 from tree.attributes import DAYS_PER_YEAR
 
 TIME_STEP_DAYS = 10.0
+HYDROTROPIC_SUBTYPES = (5, 6)
+HYDROTROPISM = 3 
+# TropismS
+HYDROTROPIC_TROPISM_STRENGTH = 0.10
 XML_PATH = Path(__file__).resolve().parent.parent / "parameters" / "Picea_Abies_combined_v6.xml"
 
 
@@ -23,21 +27,35 @@ class RootSystem(NamedTuple):
     subtypes: np.ndarray
 
 
-def build_soil_grid(values: np.ndarray, grid: VoxelGrid) -> pb.EquidistantGrid3D:
+def pad_for_lookup(values: np.ndarray, grid: VoxelGrid) -> np.ndarray:
     """CPlantBox maps a coordinate onto n-1 intervals, so the lookup needs one extra node
     per axis to land on exactly the same cells as the voxel grid. Its depth index runs
-    upward, hence the flip."""
-    lookup = pb.EquidistantGrid3D(
-        -grid.half_width_cm, grid.half_width_cm, grid.column_cells + 1,
-        -grid.half_length_cm, grid.half_length_cm, grid.row_cells + 1,
-        -grid.depth_cm, 0.0, grid.depth_cells + 1)
-
+    upward, hence the flip. The replicated border makes the field flat outside the domain."""
     padded = np.empty((grid.depth_cells + 1, grid.row_cells + 1, grid.column_cells + 1))
     padded[:-1, :-1, :-1] = values[::-1, :, :]
     padded[-1, :, :] = padded[-2, :, :]
     padded[:, -1, :] = padded[:, -2, :]
     padded[:, :, -1] = padded[:, :, -2]
-    lookup.data = padded.ravel().tolist()
+    return padded
+
+
+def build_soil_grid(values: np.ndarray, grid: VoxelGrid) -> pb.EquidistantGrid3D:
+    lookup = pb.EquidistantGrid3D(
+        -grid.half_width_cm, grid.half_width_cm, grid.column_cells + 1,
+        -grid.half_length_cm, grid.half_length_cm, grid.row_cells + 1,
+        -grid.depth_cm, 0.0, grid.depth_cells + 1)
+    lookup.data = pad_for_lookup(values, grid).ravel().tolist()
+    return lookup
+
+
+def build_interpolated_soil_grid(values: np.ndarray, grid: VoxelGrid) -> pb.InterpolatedGrid3D:
+    """Same data, read with trilinear interpolation. A tropism samples candidate directions
+    well under a centimetre apart, so it needs a field whose gradient is not zero inside a cell."""
+    lookup = pb.InterpolatedGrid3D(
+        -grid.half_width_cm, grid.half_width_cm, grid.column_cells + 1,
+        -grid.half_length_cm, grid.half_length_cm, grid.row_cells + 1,
+        -grid.depth_cm, 0.0, grid.depth_cells + 1)
+    lookup.data = pad_for_lookup(values, grid).ravel().tolist()
     return lookup
 
 
@@ -48,6 +66,18 @@ def assign_soil_hooks(plant: pb.Plant, elongation_grid, angle_grid) -> None:
         parameter.f_se = elongation_grid
         if angle_grid is not None:
             parameter.f_sa = angle_grid
+
+
+def assign_hydrotropism(plant: pb.Plant, water_lookup) -> None:
+    """setSoil() has to precede initialize(): the tropism callbacks are built there, out of
+    the soil the plant holds at that instant. Feed it the dimensionless water scale rather
+    than raw matric potential - CPlantBox blends hydro and gravitropism 10:1, and a psi
+    running to 1e5 would swamp the gravitropic term instead of outweighing it."""
+    plant.setSoil(water_lookup)
+    for parameter in plant.getOrganRandomParameter(pb.OrganTypes.root):
+        if parameter.subType in HYDROTROPIC_SUBTYPES:
+            parameter.tropismT = HYDROTROPISM
+            parameter.tropismS = HYDROTROPIC_TROPISM_STRENGTH
 
 
 def extract_root_system(plant: pb.Plant) -> RootSystem:
@@ -63,12 +93,15 @@ def extract_root_system(plant: pb.Plant) -> RootSystem:
 def grow_root_system(geometry, elongation_grid, seed: int, age_years: float,
                      vtp_path: Optional[Path] = None,
                      time_step_days: float = TIME_STEP_DAYS,
-                     angle_grid: Optional[pb.EquidistantGrid3D] = None) -> RootSystem:
+                     angle_grid: Optional[pb.EquidistantGrid3D] = None,
+                     water_lookup: Optional[pb.SoilLookUp] = None) -> RootSystem:
     plant = pb.Plant()
     plant.readParameters(str(XML_PATH))
     plant.setSeed(seed)
     plant.setGeometry(geometry)
     assign_soil_hooks(plant, elongation_grid, angle_grid)
+    if water_lookup is not None:
+        assign_hydrotropism(plant, water_lookup)
     plant.initialize(False)
 
     for _ in range(round(age_years * DAYS_PER_YEAR / time_step_days)):

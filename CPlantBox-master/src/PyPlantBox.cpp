@@ -489,6 +489,10 @@ PYBIND11_MODULE(plantbox, m) {
 		.def(py::init<>())
 		.def(py::init<double, double, double, int, int, int>())
 		.def(py::init<double, double, int, double, double, int, double, double, int>());
+    py::class_<InterpolatedGrid3D, EquidistantGrid3D, std::shared_ptr<InterpolatedGrid3D>>(m, "InterpolatedGrid3D")
+		.def(py::init<>())
+		.def(py::init<double, double, double, int, int, int>())
+		.def(py::init<double, double, int, double, double, int, double, double, int>());
     /**
      * tropism.h
      */
