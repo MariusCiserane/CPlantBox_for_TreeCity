@@ -15,7 +15,7 @@ from grid import VoxelGrid
 from tree.attributes import DAYS_PER_YEAR
 
 TIME_STEP_DAYS = 10.0
-HYDROTROPIC_SUBTYPES = (5, 6)
+HYDROTROPIC_SUBTYPES = (4,5, 6)
 HYDROTROPISM = 3 
 # TropismS
 HYDROTROPIC_TROPISM_STRENGTH = 0.10
@@ -90,11 +90,7 @@ def extract_root_system(plant: pb.Plant) -> RootSystem:
     return RootSystem(segments, subtypes)
 
 
-def grow_root_system(geometry, elongation_grid, seed: int, age_years: float,
-                     vtp_path: Optional[Path] = None,
-                     time_step_days: float = TIME_STEP_DAYS,
-                     angle_grid: Optional[pb.EquidistantGrid3D] = None,
-                     water_lookup: Optional[pb.SoilLookUp] = None) -> RootSystem:
+def grow_root_system(geometry, elongation_grid, seed: int, age_years: float, vtp_path: Optional[Path] = None, time_step_days: float = TIME_STEP_DAYS, angle_grid: Optional[pb.EquidistantGrid3D] = None, water_lookup: Optional[pb.SoilLookUp] = None) -> RootSystem:
     plant = pb.Plant()
     plant.readParameters(str(XML_PATH))
     plant.setSeed(seed)

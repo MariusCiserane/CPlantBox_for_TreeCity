@@ -35,9 +35,11 @@ def build_soil_records(sand_fraction, clay_fraction, bulk_density_g_cm3) -> np.n
 
 
 def estimate_van_genuchten_parameters_field(sand_fraction, clay_fraction,bulk_density_g_cm3) -> vg.Parameters:
+    # Build the input records
     records = build_soil_records(sand_fraction, clay_fraction, bulk_density_g_cm3)
+
+    # Voxel reduction
     distinct, index = np.unique(records, axis=0, return_inverse=True)
-    print(f"Rosetta: {records.shape[0]:,} voxels → {distinct.shape[0]:,} classes ({records.shape[0] / distinct.shape[0]:.1f}x reduction)")
     predicted = rosetta(ROSETTA_VERSION, SoilData.from_array(distinct.tolist()))[0]
     theta_r, theta_s, log_alpha, log_n, log_conductivity = predicted[index.ravel()].T
 

@@ -6,32 +6,29 @@ import numpy as np
 FREE_GROWTH_RESISTANCE_MPA = 0.5
 STOPPED_GROWTH_RESISTANCE_MPA = 2.5
 
-FIELD_CAPACITY_SUCTION_CM = 100.0
-WILTING_POINT_SUCTION_CM = 15000.0
+HALF_ELONGATION_SUCTION_CM = 5100.0
+WATER_STRESS_SHARPNESS = 2.0
 MINIMUM_WATER_SCALE = 0.05
 SMALLEST_SUCTION_CM = 1.0
 MINIMUM_ANGLE_SCALE = 0.35
 
 
 def apply_bengough(penetrometer_mpa: np.ndarray) -> np.ndarray:
-    """Mechanical impedance after Bengough et al. (2011): free below 0.5 MPa, stalled above 2.5.
-    """
+    """Mechanical impedance after Bengough et al. (2011): free below 0.5 MPa, stalled above 2.5"""
     span = STOPPED_GROWTH_RESISTANCE_MPA - FREE_GROWTH_RESISTANCE_MPA
     unimpeded = (STOPPED_GROWTH_RESISTANCE_MPA - penetrometer_mpa) / span
     return np.clip(unimpeded, 0.0, 1.0)
 
 
 def apply_water_stress(pressure_head_cm: np.ndarray) -> np.ndarray:
-    """Log-linear ramp between field capacity and wilting point."""
+    """Response curve around the potential that halves elongation at half the suction."""
     suction = np.maximum(np.abs(pressure_head_cm), SMALLEST_SUCTION_CM)
-    span = np.log10(WILTING_POINT_SUCTION_CM) - np.log10(FIELD_CAPACITY_SUCTION_CM)
-    unimpeded = (np.log10(WILTING_POINT_SUCTION_CM) - np.log10(suction)) / span
+    unimpeded = 1.0 / (1.0 + (suction / HALF_ELONGATION_SUCTION_CM) ** WATER_STRESS_SHARPNESS)
     return np.clip(unimpeded, MINIMUM_WATER_SCALE, 1.0)
 
 
 def compute_growth_scale(penetrometer_mpa: np.ndarray, pressure_head_cm: np.ndarray) -> np.ndarray:
-    """ Liebig's law of the minimum: the most limiting factor governs, not the product."""
-    return np.minimum(apply_bengough(penetrometer_mpa),apply_water_stress(pressure_head_cm)).astype(np.float32)
+    return (apply_bengough(penetrometer_mpa)* apply_water_stress(pressure_head_cm)).astype(np.float32)
 
 
 def compute_angle_scale(penetrometer_mpa: np.ndarray) -> np.ndarray:

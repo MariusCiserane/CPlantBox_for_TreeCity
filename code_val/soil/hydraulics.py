@@ -16,6 +16,7 @@ MOISTURE_MARGIN_M3_M3 = 1e-3
 
 def convert_moisture_to_pressure_head(moisture: np.ndarray, parameters: vg.Parameters) -> np.ndarray:
     """Moisture outside the retention curve is clipped: van Genuchten is undefined there."""
+    # Clip moisture to the valid range of the retention curve, with a small margin to avoid numerical issues
     lowest = np.minimum(parameters.theta_R + MOISTURE_MARGIN_M3_M3, parameters.theta_S)
     return vg.pressure_head(np.clip(moisture, lowest, parameters.theta_S), parameters)
 

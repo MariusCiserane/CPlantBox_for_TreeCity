@@ -11,7 +11,7 @@ import numpy as np
 
 from grid import VoxelGrid
 from soil.archetypes import MOISTURE_RANGE_M3_M3
-from soil.field import SoilField
+from soil.field import SoilField, apply_moisture_to_resistance
 from soil.wet_spots import build_probe_wet_spots
 
 SATURATED_MOISTURE_M3_M3 = MOISTURE_RANGE_M3_M3[1]
@@ -46,11 +46,24 @@ def build_leak_ramp(leak: Leak, grid: VoxelGrid) -> np.ndarray:
     return np.clip(1.0 - distances / leak.reach_cm, 0.0, 1.0)
 
 
+def build_leak_field(leaks: tuple[Leak, ...], grid: VoxelGrid) -> np.ndarray:
+    """The wetted zone as it actually is: the strongest ramp at each voxel, 1 at a leaking point
+    and 0 beyond every reach. This is what belongs next to the roots in ParaView - the wet spot
+    masks describe a different, smaller shape."""
+    ramps = [build_leak_ramp(leak, grid) for leak in leaks]
+    return np.max(ramps, axis=0).astype(np.float32) if ramps else np.zeros(grid.shape, np.float32)
+
+
 def apply_leaks(field: SoilField, leaks: tuple[Leak, ...], grid: VoxelGrid) -> SoilField:
     """Blending towards the ambient soil rather than overwriting it keeps the ramp sloping all the
     way out to the reach; taking a maximum instead would flatten it wherever the soil is already
-    wetter than the tail of the ramp, and a flat field steers nothing."""
+    wetter than the tail of the ramp, and a flat field steers nothing.
+
+    A leak is the one source that moves water without touching anything else, so the resistance
+    has to be rescaled here: wet soil is softer, and leaving it hard would let a leak reach the
+    water half of f_se while f_sa and the mechanical half never noticed."""
     moisture = field.moisture_m3_m3
     for leak in leaks:
         moisture = moisture + (leak.moisture_m3_m3 - moisture) * build_leak_ramp(leak, grid)
-    return replace(field, moisture_m3_m3=moisture.astype(np.float32))
+    wetted = replace(field, moisture_m3_m3=moisture.astype(np.float32))
+    return apply_moisture_to_resistance(wetted, field.moisture_m3_m3)

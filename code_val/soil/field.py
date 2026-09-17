@@ -35,6 +35,9 @@ CHANNEL_NOISE_SIGNS = {
 }
 COMPACTION_CHANNELS = ("penetrometer_mpa", "bulk_density_g_cm3", "moisture_m3_m3")
 
+MOISTURE_RESISTANCE_EXPONENT = -2.0 # Literature : -1 to -5 (depending on soil type and moisture
+RESISTANCE_SCALE_RANGE = (0.25, 2.0)
+
 
 @dataclass(frozen=True)
 class RoadBase:
@@ -85,6 +88,16 @@ def build_soil_field(profile: SoilProfile, grid: VoxelGrid, rng: np.random.Gener
         sand_fraction=channel("sand_fraction", TEXTURE_FRACTION_RANGE),
         clay_fraction=channel("clay_fraction", TEXTURE_FRACTION_RANGE),
     )
+
+
+def apply_moisture_to_resistance(field: SoilField, reference_moisture_m3_m3: np.ndarray) -> SoilField:
+    """Rescale penetration resistance wherever moisture has moved on its own.
+    """
+    reference = np.maximum(reference_moisture_m3_m3, MOISTURE_RANGE_M3_M3[0])
+    scale = np.clip((field.moisture_m3_m3 / reference) ** MOISTURE_RESISTANCE_EXPONENT,
+                    *RESISTANCE_SCALE_RANGE)
+    softened = np.clip(field.penetrometer_mpa * scale, *PENETROMETER_RANGE_MPA)
+    return replace(field, penetrometer_mpa=softened.astype(np.float32))
 
 
 def apply_road_base_override(field: SoilField, mask: np.ndarray, road_base: RoadBase) -> SoilField:
