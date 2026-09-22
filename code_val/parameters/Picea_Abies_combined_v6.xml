@@ -117,7 +117,7 @@ Subtype mapping:
 <parameter name="seedPos.x" value="0"/>
 <parameter name="seedPos.y" value="0"/>
 <parameter name="seedPos.z" value="-3"/>
-<parameter name="simulationTime" value="21900"/>
+<parameter name="simulationTime" value="43300"/>
 <parameter name="a" value="0.18"/>
 <parameter name="dx" value="1.0"/>
 <parameter name="dxMin" value="1e-06"/>
@@ -153,7 +153,7 @@ Subtype mapping:
 <parameter name="dxMin" value="1e-06"/>
 <parameter name="ldelay" value="-1"/>
 <parameter name="gf" value="1"/>
-<parameter name="tropismT" value="1"/>
+<parameter name="tropismT" value="0"/>
 <parameter name="tropismN" value="6"/>
 <parameter name="tropismS" value="0.012"/>
 <parameter name="successor" ruleId="0" numLat="1" Where="" subType="2" organType="2" percentage="1.0"/>
@@ -232,7 +232,7 @@ Subtype mapping:
 <parameter name="dxMin" value="1e-06"/>
 <parameter name="ldelay" value="-1"/>
 <parameter name="gf" value="1"/>
-<parameter name="tropismT" value="1"/>
+<parameter name="tropismT" value="0"/>
 <!--  Wider candidate search for obstacle avoidance. The engine's strong
        sinker-depth objective still selects near-vertical growth away from pipes,
        while the wider search provides legal tangential candidates near a hard pipe.  -->

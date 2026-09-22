@@ -15,7 +15,7 @@ from grid import VoxelGrid
 from tree.attributes import DAYS_PER_YEAR
 
 TIME_STEP_DAYS = 10.0
-HYDROTROPIC_SUBTYPES = (4,5, 6)
+HYDROTROPIC_SUBTYPES = (5, 6)
 HYDROTROPISM = 3 
 # TropismS
 HYDROTROPIC_TROPISM_STRENGTH = 0.10

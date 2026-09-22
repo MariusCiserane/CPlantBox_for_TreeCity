@@ -1,6 +1,5 @@
 """Localised wet pockets, to give a tropism something it can actually follow."""
 from dataclasses import dataclass, replace
-from itertools import product
 
 import numpy as np
 
@@ -9,17 +8,6 @@ from soil.archetypes import MOISTURE_RANGE_M3_M3
 from soil.field import SoilField
 
 SATURATED_MOISTURE_M3_M3 = MOISTURE_RANGE_M3_M3[1]
-
-# All eight sit inside the 254 cm that hold 99 % of the root mass, otherwise nothing ever
-# reaches them. The tropism reads the continuous SDF field, not these voxels, so the radius no
-# longer has to compensate for the cell size.
-PROBE_RADIUS_CM = 45.0
-ISOLATED_DISTANCE_CM = 180.0
-ISOLATED_BEARINGS_DEGREES = (0.0, 90.0, 180.0, 270.0)
-ISOLATED_DEPTHS_CM = (90.0, 135.0, 180.0, 225.0)
-CLUSTER_BEARING_DEGREES = 45.0
-CLUSTER_DISTANCES_CM = (200.0, 310.0)
-CLUSTER_DEPTHS_CM = (85.0, 190.0)
 
 
 @dataclass(frozen=True)
@@ -47,19 +35,6 @@ def apply_wet_spots(field: SoilField, spots: tuple[WetSpot, ...], grid: VoxelGri
     for spot in spots:
         moisture = np.where(build_wet_spot_mask(spot, grid), spot.moisture_m3_m3, moisture)
     return replace(field, moisture_m3_m3=moisture.astype(np.float32))
-
-
-def build_probe_wet_spots() -> tuple[WetSpot, ...]:
-    """Four pockets far from each other and from the trunk, four packed together well away from
-    those: a root that only reaches the cluster found water, one that reaches everything wandered."""
-    isolated = [WetSpot(f"isolee_{bearing:.0f}", depth_cm=depth, bearing_degrees=bearing,
-                        distance_cm=ISOLATED_DISTANCE_CM, radius_cm=PROBE_RADIUS_CM)
-                for bearing, depth in zip(ISOLATED_BEARINGS_DEGREES, ISOLATED_DEPTHS_CM)]
-    clustered = [WetSpot(f"grappe_{distance:.0f}_{depth:.0f}", depth_cm=depth,
-                         bearing_degrees=CLUSTER_BEARING_DEGREES, distance_cm=distance,
-                         radius_cm=PROBE_RADIUS_CM)
-                 for distance, depth in product(CLUSTER_DISTANCES_CM, CLUSTER_DEPTHS_CM)]
-    return tuple(isolated + clustered)
 
 
 def build_wet_spot_field(spots: tuple[WetSpot, ...], grid: VoxelGrid) -> np.ndarray:

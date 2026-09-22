@@ -1,35 +1,14 @@
-"""Draw one concrete soil profile around an archetype.
-
-Sampling around the archetype rather than picking it verbatim is what stops the
-network from learning a lookup table of ten soils instead of the underlying
-relationship between resistance, water and root growth.
-"""
+"""Draw one concrete soil profile around an archetype."""
 from dataclasses import dataclass
 
 import numpy as np
 
-from soil.archetypes import (
-    BULK_DENSITY_RANGE_G_CM3,
-    MOISTURE_RANGE_M3_M3,
-    PENETROMETER_RANGE_MPA,
-    TEXTURE_FRACTION_RANGE,
-    TOPSOIL_DEPTH_RANGE_CM,
-    SoilArchetype,
-    SoilHorizon,
-)
+from soil.archetypes import (BULK_DENSITY_RANGE_G_CM3, MOISTURE_RANGE_M3_M3, PENETROMETER_RANGE_MPA, TEXTURE_FRACTION_RANGE, TOPSOIL_DEPTH_RANGE_CM, SoilArchetype, SoilHorizon)
 
 RELATIVE_JITTER = 0.15
 DEPTH_JITTER_CM = 10.0
 MAXIMUM_SAND_PLUS_CLAY = 0.95
 
-
-@dataclass(frozen=True)
-class SoilProfile:
-    archetype_identifier: int
-    archetype_name: str
-    topsoil_depth_cm: float
-    topsoil: SoilHorizon
-    subsoil: SoilHorizon
 
 
 def clamp(value: float, bounds: tuple[float, float]) -> float:
@@ -61,9 +40,16 @@ def jitter_horizon(horizon: SoilHorizon, rng: np.random.Generator) -> SoilHorizo
     )
 
 
+@dataclass(frozen=True)
+class SoilProfile:
+    archetype_identifier: int
+    archetype_name: str
+    topsoil_depth_cm: float
+    topsoil: SoilHorizon
+    subsoil: SoilHorizon
+
 def draw_soil_profile(archetype: SoilArchetype, rng: np.random.Generator) -> SoilProfile:
     topsoil = jitter_horizon(archetype.topsoil, rng)
     subsoil = topsoil if archetype.is_uniform else jitter_horizon(archetype.subsoil, rng)
-    depth = clamp(archetype.topsoil_depth_cm + rng.uniform(-DEPTH_JITTER_CM, DEPTH_JITTER_CM),
-                  TOPSOIL_DEPTH_RANGE_CM)
+    depth = clamp(archetype.topsoil_depth_cm + rng.uniform(-DEPTH_JITTER_CM, DEPTH_JITTER_CM), TOPSOIL_DEPTH_RANGE_CM)
     return SoilProfile(archetype.identifier, archetype.name, depth, topsoil, subsoil)

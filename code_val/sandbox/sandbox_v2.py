@@ -12,31 +12,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import sandbox_v1
 from dataset.occupancy import compute_occupancy_probability, voxelize_structural_roots
 from grid import VoxelGrid
-from obstacles.geometry import build_growth_geometry
-from obstacles.layouts import NO_OBSTACLE, TREE_PIT_HALF_SIZE_RANGE_CM, draw_obstacle_layout
+from obstacles.coverage import build_coverage, build_label_field
+from obstacles.intrusion import find_intrusions, measure_largest_growth_step_cm
+from obstacles.layouts import TREE_PIT_HALF_SIZE_RANGE_CM
+from obstacles.leakage import build_plume_ramp, build_scene_leaks
+from obstacles.shapes import build_scene_shapes
+from obstacles.street import draw_street_scene
+from obstacles.walls import PIPE_EXCLUSION_MARGIN_CM, build_street_geometry
 from paraview import write_voxel_grids
 from soil.archetypes import PIT_SUBSTRATE_ARCHETYPE, find_archetype
 from soil.field import build_soil_field
+from soil.fill import apply_fills, measure_natural_share
 from soil.growth_response import (apply_bengough, apply_water_stress, compute_angle_scale,
                                   compute_growth_scale)
 from soil.hydraulics import build_pressure_head_field
-from soil.leak import apply_leaks, build_leak_field, build_probe_leaks
+from soil.leak import apply_leaks
 from soil.pit import TREE_PIT_DEPTH_RANGE_CM, apply_planting_pit, build_pit_mask
 from soil.profile import draw_soil_profile
-from soil.wet_spot_geometry import build_wet_spot_lookup
-from soil.wet_spots import build_probe_wet_spots
-from tree.growth import build_interpolated_soil_grid, build_soil_grid, grow_root_system
+from tree.growth import (XML_PATH, build_interpolated_soil_grid, build_soil_grid,
+                         grow_root_system)
 
 SANDBOX_PARENT = Path(__file__).resolve().parent
-SANDBOX_ARCHETYPE_IDENTIFIERS = (1,2)  # loose, sandy dry, compacted, clayey wet, sand over clay, hardpan, hard base, compacted topsoil
+SANDBOX_ARCHETYPE_IDENTIFIERS = (1,2,3,4,5,6,7,8,9,10)  # loose, sandy dry, compacted, clayey wet, sand over clay, hardpan, hard base, compacted topsoilZ
 SANDBOX_AGE_YEARS = 120.0
 SANDBOX_SEED = 7
-SANDBOX_RUNS = 10
+SANDBOX_RUNS = 50
 SEED_STRIDE = 100
-WET_SPOTS = build_probe_wet_spots()
-LEAKS = build_probe_leaks()
-INTERPOLATED_FIELD = "champ"
-SDF_CONTROL = "sdf"
 
 
 def measure_maximum_depth_cm(segments: np.ndarray) -> float:
@@ -58,9 +59,9 @@ def measure_occupancy_shape(probability: np.ndarray, grid: VoxelGrid) -> tuple[f
             float((probability * depths).sum() / total))
 
 
-def grow_repeatedly(geometry, elongation_grid, angle_grid, water_lookup, grid: VoxelGrid,
-                    vtp_path: Path):
-    segment_counts, depths, occupancies = [], [], []
+def grow_repeatedly(geometry, elongation_grid, angle_grid, water_lookup, shapes,
+                    grid: VoxelGrid, vtp_path: Path):
+    segment_counts, depths, occupancies, intrusions = [], [], [], {}
     for run in range(SANDBOX_RUNS):
         roots = grow_root_system(geometry, elongation_grid, SANDBOX_SEED + run * SEED_STRIDE,
                                  SANDBOX_AGE_YEARS, vtp_path if run == 0 else None,
@@ -68,63 +69,62 @@ def grow_repeatedly(geometry, elongation_grid, angle_grid, water_lookup, grid: V
         segment_counts.append(len(roots.segments))
         depths.append(measure_maximum_depth_cm(roots.segments))
         occupancies.append(voxelize_structural_roots(roots.segments, roots.subtypes, grid).grid)
-    return np.array(segment_counts), np.array(depths), occupancies
+        for name, depth_cm in find_intrusions(roots.segments, shapes).items():
+            intrusions[name] = max(intrusions.get(name, 0.0), depth_cm)
+    return np.array(segment_counts), np.array(depths), occupancies, intrusions
 
 
-def save_scene_fields(directory: Path, name: str, growth_scale: np.ndarray, mechanical: np.ndarray,
-                      water: np.ndarray, occupancy: np.ndarray, angle_scale: np.ndarray | None,
-                      grid: VoxelGrid) -> None:
+def save_scene_fields(directory: Path, name: str, fields: dict[str, np.ndarray],
+                      occupancy: np.ndarray, grid: VoxelGrid) -> None:
     np.save(directory / f"{name}.npy", occupancy)
-    fields = {"f_se": growth_scale, "bengough": mechanical, "eau": water, "occupancy": occupancy,
-              "fuites": build_leak_field(LEAKS, grid)}
-    if angle_scale is not None:
-        fields["f_sa"] = angle_scale
     write_voxel_grids(directory / f"{name}.vti", fields, grid)
 
 
-def build_water_lookup(water: np.ndarray, grid: VoxelGrid, source):
-    """The SDF control describes the same places analytically, so a matching bias between the two
-    says the interpolated field is read correctly."""
-    if source == SDF_CONTROL:
-        return build_wet_spot_lookup(WET_SPOTS)
-    if source == INTERPOLATED_FIELD:
-        return build_interpolated_soil_grid(water, grid)
-    return None
-
-
-def build_soil_v2(profile, grid, rng):
-    # Shared noise, per-voxel Rosetta, planting pit, leaks that soften as well as wet
-    
-    # Original soil 
+def build_soil_v2(profile, scene, shapes, coverages, sources, grid, rng):
+    # Shared noise, per-voxel Rosetta, planting pit, trench fills, leaks that soften as well as wet.
+    # Order matters: a fill arrives with its resistance and its moisture already consistent, so it
+    # lands before the leak rescales resistance from moisture, and is never rescaled itself.
     ambient = build_soil_field(profile, grid, rng)
-    # Planting pit
     pit = build_soil_field(draw_soil_profile(PIT_SUBSTRATE_ARCHETYPE, rng), grid, rng)
-    field = apply_planting_pit(ambient, pit, build_pit_mask(float(rng.uniform(*TREE_PIT_HALF_SIZE_RANGE_CM)),float(rng.uniform(*TREE_PIT_DEPTH_RANGE_CM)), grid))
+    field = apply_planting_pit(ambient, pit,
+                               build_pit_mask(scene.pit_radius_cm, scene.pit_depth_cm, grid))
 
-    # Leaks
-    field = apply_leaks(field, LEAKS, grid)
+    field = apply_fills(field, tuple(horizon for _, horizon in shapes.fills), coverages)
+    field = apply_leaks(field, sources, measure_natural_share(coverages, grid.shape))
 
-    # Pressure head field
     pressure_head = build_pressure_head_field(field)
-
-    # return field, pressure_head, and the growth scale that combines mechanical and water stress
     return field, pressure_head, compute_growth_scale(field.penetrometer_mpa, pressure_head)
 
 
-def build_soil_v1(profile, grid, rng):
+def build_soil_v1(profile, scene, shapes, coverages, sources, grid, rng):
     # Independent noise per channel, Rosetta per horizon; both pipelines multiply now
-    field = apply_leaks(sandbox_v1.build_soil_field(profile, grid, rng), LEAKS, grid)
+    field = sandbox_v1.build_soil_field(profile, grid, rng)
+    field = apply_fills(field, tuple(horizon for _, horizon in shapes.fills), coverages)
+    field = apply_leaks(field, sources, measure_natural_share(coverages, grid.shape))
     pressure_head = sandbox_v1.build_pressure_head_field(field, profile, grid)
     return field, pressure_head, sandbox_v1.compute_growth_scale(field.penetrometer_mpa, pressure_head)
 
 
-def run_scene(archetype_identifier: int, grid: VoxelGrid, build_soil, directory: Path, is_scale_angle: bool, water_source) -> None:
+def run_scene(archetype_identifier: int, grid: VoxelGrid, build_soil, directory: Path,is_scale_angle: bool, is_hydro: bool) -> None:
     # Random soil profile, drawn before either pipeline so both modes get the same soil
     #---- SOIL -----
     rng = np.random.default_rng([SANDBOX_SEED, archetype_identifier])
     profile = draw_soil_profile(find_archetype(archetype_identifier), rng)
-    # Soil field  = Noised texture + density + moisture
-    field, pressure_head, growth_scale = build_soil(profile, grid, rng)
+
+   # ---- SCENE -----
+    # Seeded without the archetype: every soil meets the same pipes, the same trenches, the same
+    # pit and the same leaks, so a difference between two scenes can only come from the soil.
+    # The dataset is where the scene varies.
+    scene_rng = np.random.default_rng(SANDBOX_SEED)
+    scene = draw_street_scene(float(scene_rng.uniform(*TREE_PIT_HALF_SIZE_RANGE_CM)),float(scene_rng.uniform(*TREE_PIT_DEPTH_RANGE_CM)),grid.half_width_cm, scene_rng)
+
+    street_leaks = build_scene_leaks(scene.utilities, scene_rng)
+    shapes = build_scene_shapes(scene, grid)
+    sources = tuple((build_plume_ramp(leak, grid), leak.moisture_m3_m3) for leak in street_leaks)
+
+    coverages = tuple(build_coverage(shape, grid) for shape, _ in shapes.fills)
+
+    field, pressure_head, growth_scale = build_soil(profile, scene, shapes, coverages, sources, grid, rng)
 
     #---- MECHANICAL -----
     mechanical = apply_bengough(field.penetrometer_mpa)
@@ -134,27 +134,39 @@ def run_scene(archetype_identifier: int, grid: VoxelGrid, build_soil, directory:
     elongation_grid = build_soil_grid(growth_scale, grid)
     angle_scale = compute_angle_scale(field.penetrometer_mpa) if is_scale_angle else None
     angle_grid = build_soil_grid(angle_scale, grid) if is_scale_angle else None
-    water_lookup = build_water_lookup(water, grid, water_source)
+    water_lookup = build_interpolated_soil_grid(water, grid) if is_hydro else None
 
     growth_started = time.perf_counter()
 
-    # Build geometry without obstacles, change family to see the difference
-    geometry = build_growth_geometry(draw_obstacle_layout(NO_OBSTACLE, rng), grid)
-    segment_counts, depths, occupancies = grow_repeatedly(geometry, elongation_grid, angle_grid, water_lookup, grid,directory / f"{profile.archetype_name}.vtp")
-    
+    # CPlantBox builds the tropism callbacks in initialize(), reading the geometry it holds at that
+    # instant.
+    geometry = build_street_geometry(shapes, grid)
+    segment_counts, depths, occupancies, intrusions = grow_repeatedly(
+        geometry, elongation_grid, angle_grid, water_lookup, shapes, grid,
+        directory / f"{profile.archetype_name}.vtp")
+
     growth_seconds = time.perf_counter() - growth_started
 
     # Compute occupany voxels grid
     ensemble = compute_occupancy_probability(occupancies)
     mean_radius_cm, mean_depth_cm = measure_occupancy_shape(ensemble.probability, grid)
-    save_scene_fields(directory, profile.archetype_name, growth_scale, mechanical, water, ensemble.probability, angle_scale, grid)
+    scene_fields = {"f_se": growth_scale, "bengough": mechanical, "eau": water,
+                    "psi": pressure_head, "occupancy": ensemble.probability,
+                    "fuites": np.max([ramp for ramp, _ in sources], axis=0) if sources
+                    else np.zeros(grid.shape, np.float32),
+                    # Numbered in the order of street.NETWORK_TEMPLATES, so a pipe is identifiable.
+                    "tuyaux": build_label_field(shapes.lumens, grid),
+                    "remblais": 1.0 - measure_natural_share(coverages, grid.shape)}
+    if angle_scale is not None:
+        scene_fields["f_sa"] = angle_scale
+    save_scene_fields(directory, profile.archetype_name, scene_fields, ensemble.probability, grid)
 
     print(f"{profile.archetype_name:<18s}"
           f" bengough {mechanical.mean():.3f}"
           f" eau {water.mean():.3f}"
           f" -> f_se {growth_scale.mean():.3f}"
           f"{f' f_sa {angle_scale.mean():.3f}' if is_scale_angle else ''}"
-          f"{f' hydro[{water_source}]' if water_source else ''}")
+          f"{' hydro' if is_hydro else ''}")
     print(f"{'':<18s}"
           f" segments {segment_counts.mean():7.0f} +/- {segment_counts.std():5.0f}"
           f" profondeur {depths.mean():6.1f} +/- {depths.std():5.1f} cm"
@@ -162,6 +174,10 @@ def run_scene(archetype_identifier: int, grid: VoxelGrid, build_soil, directory:
           f" masse {ensemble.probability.mean():.5f}"
           f" rayon {mean_radius_cm:5.1f} cm profondeur_moy {mean_depth_cm:5.1f} cm"
           f" croissance {growth_seconds:6.2f} s", flush=True)
+    leaking = ",".join(leak.name for leak in street_leaks) or "aucune"
+    print(f"{'':<18s}"
+          f" fuites {leaking}"
+          f" intrusions {intrusions or 'aucune'}", flush=True)
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -172,8 +188,6 @@ def parse_arguments() -> argparse.Namespace:
                         help="brancher aussi f_sa, l'angle d'insertion des laterales")
     parser.add_argument("--hydro", action="store_true",
                         help="brancher l'hydrotropisme sur le champ d'eau interpole")
-    parser.add_argument("--hydro-sdf", action="store_true",
-                        help="temoin : hydrotropisme sur les poches SDF analytiques")
     parser.add_argument("--output", type=Path, default=None,
                         help="dossier de sortie personnalisé (défaut: sandbox_v2 ou sandbox_v1)")
     return parser.parse_args()
@@ -185,16 +199,18 @@ def main() -> None:
     version = "v1" if args.v1 else "v2"
     build_soil = build_soil_v1 if args.v1 else build_soil_v2
 
-    water_source = SDF_CONTROL if args.hydro_sdf else (INTERPOLATED_FIELD if args.hydro else None)
-
-    suffix = "".join(part for part, enabled in (("_fsa", args.f_sa), ("_hydro", args.hydro),("_hydrosdf", args.hydro_sdf)) if enabled)
+    suffix = "".join(part for part, enabled in (("_fsa", args.f_sa), ("_hydro", args.hydro)) if enabled)
     directory = args.output if args.output else SANDBOX_PARENT / f"sandbox_{version}{suffix}"
     directory.mkdir(parents=True, exist_ok=True)
 
     grid = VoxelGrid(34, 64, 64, 15.0, 9.0)
-    
+
+    largest_step_cm = measure_largest_growth_step_cm(XML_PATH)
+    assert PIPE_EXCLUSION_MARGIN_CM > largest_step_cm, (
+        f"exlcusion margin {PIPE_EXCLUSION_MARGIN_CM} cm <= bigger dx {largest_step_cm} cm")
+
     for identifier in SANDBOX_ARCHETYPE_IDENTIFIERS:
-        run_scene(identifier, grid, build_soil, directory, args.f_sa, water_source)
+        run_scene(identifier, grid, build_soil, directory, args.f_sa, args.hydro)
 
 
 if __name__ == "__main__":

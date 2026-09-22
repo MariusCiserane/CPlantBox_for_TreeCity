@@ -90,12 +90,10 @@ def build_soil_field(profile: SoilProfile, grid: VoxelGrid, rng: np.random.Gener
     )
 
 
-def apply_moisture_to_resistance(field: SoilField, reference_moisture_m3_m3: np.ndarray) -> SoilField:
-    """Rescale penetration resistance wherever moisture has moved on its own.
-    """
+def apply_moisture_to_resistance(field: SoilField, reference_moisture_m3_m3: np.ndarray,natural_share: np.ndarray) -> SoilField:
+    """Rescale penetration resistance wherever moisture has moved on its own."""
     reference = np.maximum(reference_moisture_m3_m3, MOISTURE_RANGE_M3_M3[0])
-    scale = np.clip((field.moisture_m3_m3 / reference) ** MOISTURE_RESISTANCE_EXPONENT,
-                    *RESISTANCE_SCALE_RANGE)
+    scale = np.clip((field.moisture_m3_m3 / reference) ** MOISTURE_RESISTANCE_EXPONENT,*RESISTANCE_SCALE_RANGE) ** natural_share
     softened = np.clip(field.penetrometer_mpa * scale, *PENETROMETER_RANGE_MPA)
     return replace(field, penetrometer_mpa=softened.astype(np.float32))
 
