@@ -37,7 +37,6 @@ def build_radius_arrays(polydata, parameters: SecondaryGrowthParameters) -> tupl
         "radius_pipe": compute_pipe_radius(tree, parameters.pipe_efficiency),
         "radius_da_vinci": compute_da_vinci_radius(tree, parameters.area_conservation),
         "radius_murray": murray_radii,
-        FINAL_RADIUS_NAME: enforce_continuity(fused, tree.parent_indices, tree.levels,
-                                              tree.primary_radii, parameters.maximum_radius_cm),
+        FINAL_RADIUS_NAME: enforce_continuity(fused, tree.parent_indices, tree.levels, tree.primary_radii, parameters.maximum_radius_cm),
     }
     return arrays, tree
