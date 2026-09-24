@@ -13,11 +13,7 @@ import numpy as np
 from dataset.tensors import CHANNEL_NAMES
 from grid import VoxelGrid
 from obstacles.masks import OBSTACLE_DISTANCE_CLIP_CM
-from soil.archetypes import (
-    BULK_DENSITY_RANGE_G_CM3,
-    MOISTURE_RANGE_M3_M3,
-    PENETROMETER_RANGE_MPA,
-)
+from soil.archetypes import BULK_DENSITY_RANGE_G_CM3, PENETROMETER_RANGE_MPA
 
 QUANTISATION_LEVELS = 255
 PALETTE = ("#10163a", "#1f4b99", "#2ba0a0", "#c8d92a", "#fdfbe4")
@@ -28,7 +24,7 @@ UNITLESS = ("", 0.0, 1.0)
 CHANNEL_UNITS = {
     "penetrometer": ("MPa", *PENETROMETER_RANGE_MPA),
     "bulk_density": ("g/cm³", *BULK_DENSITY_RANGE_G_CM3),
-    "moisture": ("m³/m³", 0.0, MOISTURE_RANGE_M3_M3[1]),
+    "available_water": UNITLESS,
     "sand_fraction": UNITLESS,
     "clay_fraction": UNITLESS,
     "pipe_mask": UNITLESS,

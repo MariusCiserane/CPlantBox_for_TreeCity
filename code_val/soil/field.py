@@ -2,7 +2,7 @@
 
 A horizon is not uniform in reality, so every channel carries smooth spatial
 noise. Two noise fields are drawn, one per physical process, and shared by the
-channels that process drives: compaction moves resistance, density and moisture
+channels that process drives: compaction moves resistance, density and water
 together, while textural heterogeneity comes from different fill materials and
 is unrelated to traffic loading. Noising each channel on its own, as before,
 allowed a voxel to be dense, wet and weak at the same time.
@@ -20,8 +20,8 @@ from scipy.ndimage import gaussian_filter
 
 from grid import VoxelGrid
 from soil.archetypes import (
+    AVAILABLE_WATER_RANGE,
     BULK_DENSITY_RANGE_G_CM3,
-    MOISTURE_RANGE_M3_M3,
     PENETROMETER_RANGE_MPA,
     TEXTURE_FRACTION_RANGE,
 )
@@ -36,28 +36,32 @@ NOISE_AMPLITUDE = 0.08
 CHANNEL_NOISE_SIGNS = {
     "penetrometer_mpa": 1.0,
     "bulk_density_g_cm3": 1.0,
-    "moisture_m3_m3": -1.0,
+    "available_water_fraction": -1.0,
     "sand_fraction": 1.0,
     "clay_fraction": -1.0,
 }
-COMPACTION_CHANNELS = ("penetrometer_mpa", "bulk_density_g_cm3", "moisture_m3_m3")
+COMPACTION_CHANNELS = ("penetrometer_mpa", "bulk_density_g_cm3", "available_water_fraction")
 
-MOISTURE_RESISTANCE_EXPONENT = -2.0 # Literature : -1 to -5 (depending on soil type and moisture
+# Literature : -1 to -5 (depending on soil type and moisture). It is published against
+# volumetric moisture; applied here to the ratio of available water fractions, which keeps the
+# direction and is bounded by RESISTANCE_SCALE_RANGE either way.
+WATER_RESISTANCE_EXPONENT = -2.0
 RESISTANCE_SCALE_RANGE = (0.25, 2.0)
+DRIEST_REFERENCE_FRACTION = 0.02
 
 
 @dataclass(frozen=True)
 class RoadBase:
     penetrometer_mpa: float
     bulk_density_g_cm3: float
-    moisture_m3_m3: float
+    available_water_fraction: float
 
 
 @dataclass(frozen=True)
 class SoilField:
     penetrometer_mpa: np.ndarray
     bulk_density_g_cm3: np.ndarray
-    moisture_m3_m3: np.ndarray
+    available_water_fraction: np.ndarray
     sand_fraction: np.ndarray
     clay_fraction: np.ndarray
 
@@ -95,7 +99,7 @@ def build_mosaic_field(mosaic: SoilMosaic, weights: np.ndarray, grid: VoxelGrid,
     return SoilField(
         penetrometer_mpa=channel("penetrometer_mpa", PENETROMETER_RANGE_MPA),
         bulk_density_g_cm3=channel("bulk_density_g_cm3", BULK_DENSITY_RANGE_G_CM3),
-        moisture_m3_m3=channel("moisture_m3_m3", MOISTURE_RANGE_M3_M3),
+        available_water_fraction=channel("available_water_fraction", AVAILABLE_WATER_RANGE),
         sand_fraction=channel("sand_fraction", TEXTURE_FRACTION_RANGE),
         clay_fraction=channel("clay_fraction", TEXTURE_FRACTION_RANGE),
     )
@@ -106,10 +110,10 @@ def build_soil_field(profile: SoilProfile, grid: VoxelGrid, rng: np.random.Gener
     return build_mosaic_field(single_patch_mosaic(profile), weights, grid, rng)
 
 
-def apply_moisture_to_resistance(field: SoilField, reference_moisture_m3_m3: np.ndarray,natural_share: np.ndarray) -> SoilField:
-    """Rescale penetration resistance wherever moisture has moved on its own."""
-    reference = np.maximum(reference_moisture_m3_m3, MOISTURE_RANGE_M3_M3[0])
-    scale = np.clip((field.moisture_m3_m3 / reference) ** MOISTURE_RESISTANCE_EXPONENT,*RESISTANCE_SCALE_RANGE) ** natural_share
+def apply_water_to_resistance(field: SoilField, reference_fraction: np.ndarray,natural_share: np.ndarray) -> SoilField:
+    """Rescale penetration resistance wherever the water content has moved on its own."""
+    reference = np.maximum(reference_fraction, DRIEST_REFERENCE_FRACTION)
+    scale = np.clip((field.available_water_fraction / reference) ** WATER_RESISTANCE_EXPONENT,*RESISTANCE_SCALE_RANGE) ** natural_share
     softened = np.clip(field.penetrometer_mpa * scale, *PENETROMETER_RANGE_MPA)
     return replace(field, penetrometer_mpa=softened.astype(np.float32))
 
@@ -120,5 +124,5 @@ def apply_road_base_override(field: SoilField, mask: np.ndarray, road_base: Road
         field,
         penetrometer_mpa=np.where(mask, road_base.penetrometer_mpa, field.penetrometer_mpa),
         bulk_density_g_cm3=np.where(mask, road_base.bulk_density_g_cm3, field.bulk_density_g_cm3),
-        moisture_m3_m3=np.where(mask, road_base.moisture_m3_m3, field.moisture_m3_m3),
+        available_water_fraction=np.where(mask, road_base.available_water_fraction, field.available_water_fraction),
     )

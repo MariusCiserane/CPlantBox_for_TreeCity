@@ -8,9 +8,15 @@ elongation scale a root apex reads at its own position. Both generators share th
 Each step is one file, and each takes the previous one's output.
 
 1. **`archetypes.py` — the reference soils.** 10 archetypes, each two horizons (topsoil,
-   subsoil) of five channels: penetration resistance, bulk density, moisture, sand and clay
-   fraction. Also the physical bounds every later step clips to, and `PIT_SUBSTRATE_ARCHETYPE`,
-   the amended backfill of a planting pit.
+   subsoil) of five channels: penetration resistance, bulk density, **available water fraction**,
+   sand and clay fraction. Also the physical bounds every later step clips to, and
+   `PIT_SUBSTRATE_ARCHETYPE`, the amended backfill of a planting pit.
+   Water is authored as a **share of the available water capacity**, 0 at the wilting point and 1
+   at field capacity — never as a volumetric moisture. θ is not comparable across textures:
+   θ = 0.12 is above field capacity in a sand and below the wilting point in a clay, so the same
+   number on two lines would describe two opposite soils, and a ±15 % jitter would cross a sand's
+   entire reserve (0.014 m³/m³ wide) eight times over. The fraction means the same thing
+   everywhere, is bounded by construction, and `hydraulics.py` turns it back into θ per voxel.
 2. **`profile.py::draw_soil_profile` — jitter, do not copy.** Draws a concrete profile *around*
    an archetype: ±15 % per channel, ±10 cm on the horizon depth, with sand + clay held under 0.95
    so the texture stays a real texture.
@@ -27,7 +33,7 @@ Each step is one file, and each takes the previous one's output.
 4. **`field.py::build_mosaic_field` — the five grids.** Blends the patches with the same weights
    for every channel, which keeps a blended voxel on the segment between two real soils instead
    of somewhere no soil exists, then adds spatial noise. **Two noise fields, not five**: one for
-   compaction (resistance ↑, density ↑, moisture ↓ together) and one for texture (sand and clay
+   compaction (resistance ↑, density ↑, water ↓ together) and one for texture (sand and clay
    move apart). Noising every channel independently, as v1 did, let a voxel be dense, wet and weak
    at the same time.
 5. **`pit.py::apply_planting_pit` — the planting pit.** A second soil zone, horizontal rather
@@ -41,20 +47,22 @@ Each step is one file, and each takes the previous one's output.
    against a decreasing budget** — which is what carves the rings without any shape being
    described as a ring: the lumen reserves its volume and writes nothing, the surround takes what
    is left inside it, the backfill takes the rest.
-7. **`leak.py::apply_leaks` — the leak's water (v2).** Blends the moisture *towards* the plume
-   target rather than overwriting it, so the ramp keeps sloping all the way out; a maximum would
+7. **`leak.py::apply_leaks` — the leak's water (v2).** Blends the water fraction *towards* the
+   plume target rather than overwriting it, so the ramp keeps sloping all the way out; a maximum would
    flatten it wherever the soil is already wetter than the tail, and a flat field steers nothing.
    It then rescales the penetration resistance, which is what stops a leak from reaching the
    water half of `f_se` while the mechanical half never noticed.
-8. **`hydraulics.py` + `rosetta_batch.py` — moisture to matric potential.** Every voxel gets its
-   own retention curve, predicted by Rosetta from its own noised texture and density, so textural
+8. **`hydraulics.py` + `rosetta_batch.py` — water fraction to θ and matric potential.** Every
+   voxel gets its own retention curve, predicted by Rosetta from its own noised texture and density, so textural
    variation reaches the retention physics instead of only sliding moisture along one curve per
    horizon. Rosetta takes a batch, so the whole grid goes in one call: the records are rounded
    first and only the distinct ones are sent, so the cost follows how spread out the soil is, not
    how many voxels there are.
 9. **`growth_response.py` — the number CPlantBox reads.**
-   `f_se = bengough(resistance) × water_stress(ψ)`; `f_sa`, the lateral insertion angle scale, is
-   built from the mechanical term alone.
+   `f_se = bengough(resistance) × water_stress(available water fraction)`; `f_sa`, the lateral
+   insertion angle scale, is built from the mechanical term alone. Both responses are piecewise
+   linear on a quantity that is already comparable across soils, so neither needs a retention
+   curve to be read.
 
 `wet_spots.py` is off this chain: spherical saturated pockets used only by the hydrotropism
 sandbox, to give a tropism something it can demonstrably follow.
@@ -66,11 +74,11 @@ sandbox, to give a tropism something it can demonstrably follow.
 | `archetypes.py` | the 10 reference soils, the pit substrate, and the physical bounds |
 | `profile.py` | draws a concrete profile around an archetype |
 | `mosaic.py` | several archetypes in one domain, blended by patch weights (v2) |
-| `field.py` | profile(s) → the five channel grids, with correlated noise; road-base override; moisture → resistance coupling |
+| `field.py` | profile(s) → the five channel grids, with correlated noise; road-base override; water → resistance coupling |
 | `pit.py` | the planting pit mask, and its application |
 | `fill.py` | engineered materials blended by volume fraction, against a decreasing budget |
-| `leak.py` | injects a leak plume's moisture and softens the resistance with it |
-| `hydraulics.py` | moisture + retention parameters → pressure head |
+| `leak.py` | injects a leak plume's water fraction and softens the resistance with it |
+| `hydraulics.py` | water fraction + retention parameters → θ and pressure head |
 | `rosetta_batch.py` | one Rosetta call for the whole grid, deduplicated and rounded |
 | `growth_response.py` | Bengough impedance, water stress, `f_se` and `f_sa` |
 
@@ -81,19 +89,25 @@ sandbox, to give a tropism something it can demonstrably follow.
 | Jitter around an archetype | ±15 % per channel, ±10 cm on the horizon depth |
 | Noise | amplitude 8 %, correlation length 2 voxels |
 | Bengough | free below 0.5 MPa, stalled above 2.5 MPa, linear in between |
-| Water stress | half elongation at 5 100 cm of suction, floor 0.05 |
+| Water stress | full speed above 0.40 of the reserve, linear below, floor 0.05 |
+| Available water capacity | between field capacity (−100 cm) and wilting point (−15 000 cm) |
 | `f_sa` | floor 0.35 — a lateral that cannot push sideways emerges closer to its parent's heading |
-| Moisture → resistance | exponent −2, scale clipped to [0.25, 2.0], applied only to the natural share |
+| Water → resistance | exponent −2, scale clipped to [0.25, 2.0], applied only to the natural share |
 | Patches | 2 to 4, seeds at least 250 cm apart, transition 40–90 cm (or 20 cm, 25 % of the time) |
 | Rosetta batch | rounded to 1 % texture and 0.02 g/cm³, coarsened until under 12 000 distinct records |
 | Pit | radius 50–150 cm, depth 60–100 cm |
 
 ## Choices and limits
 
-- **`HALF_ELONGATION_SUCTION_CM = 5100` puts half-reduction at pF 3.7**, while field capacity is
-  at pF 2.0–2.5: the water term only bites near wilting point. On the wetter archetypes `f_se` is
-  therefore driven by Bengough alone. Worth recalibrating if the water term is meant to carry
-  information — all the more so now that the leak plume is the only moisture structure.
+- **The water stress threshold is 0.40 of the reserve**, taken from the transpiration
+  literature, where the equivalent threshold sits at 0.3–0.4 across species. It is not a
+  root-elongation measurement: no published curve was found for woody root elongation against
+  available water, so this is the closest defensible proxy and it should be revisited against
+  species data. The previous suction-based form put half-reduction at pF 3.7, near wilting point,
+  which made the water term inert in every archetype.
+- **The water → resistance exponent is published against volumetric moisture**, and is applied
+  here to the ratio of available water fractions, because the coupling runs before Rosetta and θ
+  is not available yet. The direction and the [0.25, 2.0] clip are unchanged.
 - **Rosetta breaks down above bulk density 2.0**: θ_S tracks porosity up to BD 2.00, then returns
   to 0.367 and ignores density. Only `hard_base_at_50` (BD 2.10) is concerned. One-line fix: bound
   θ_S by the porosity the density implies.

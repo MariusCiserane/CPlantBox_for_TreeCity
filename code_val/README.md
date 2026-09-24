@@ -38,8 +38,10 @@ Each step is one module; read the code in this order.
    Each solid is rasterised as a *volume fraction*, not a mask.
 4. **Write the materials into the soil** — `soil/fill.py`, then `soil/leak.py`
    Fills blend by fraction; a leak wets the soil *and* softens its penetration resistance.
-5. **Soil → root physics** — `soil/hydraulics.py` (Rosetta → van Genuchten → ψ) then
-   `soil/growth_response.py` (Bengough impedance × water stress = `f_se`).
+5. **Soil → root physics** — `soil/hydraulics.py` (Rosetta → van Genuchten → θ and ψ) then
+   `soil/growth_response.py` (Bengough impedance × water stress = `f_se`). Soil water is authored
+   as a share of the available water capacity, not as a volumetric moisture: see
+   [soil/README.md](soil/README.md).
 6. **Grow** — `tree/growth.py`
    20 seeds per scene. `f_se` scales elongation at every apex, the interpolated water field
    drives hydrotropism on subtypes 5 and 6, and the pipe walls are an SDF difference.
@@ -127,7 +129,7 @@ Without `--workers` the pool uses `os.cpu_count() - 1` **as seen inside the cont
 |---|---|
 | `scene_00001.npz` | `inputs` (15, 34, 64, 64) · `film` · `target` (radius) · `target_centreline` · `root_volume` · both `hit_count`s · both packed run stacks · the first run's polylines |
 | `scene_00001.json` | the whole configuration, the grid, the secondary-growth parameters, the git commit, the diagnostics |
-| `scene_00001.vti` | 10 voxel fields for ParaView, to open next to the `.vtp` |
+| `scene_00001.vti` | 11 voxel fields for ParaView, to open next to the `.vtp` |
 
 The `.json` is written **last**, through a temporary file: its presence is what certifies that a
 scene is complete. Individual Monte Carlo runs are kept bit-packed, so a probability map can be

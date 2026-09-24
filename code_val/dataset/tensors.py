@@ -5,7 +5,6 @@ from grid import VoxelGrid
 from obstacles.masks import OBSTACLE_DISTANCE_CLIP_CM, ObstacleMasks
 from soil.archetypes import (
     BULK_DENSITY_RANGE_G_CM3,
-    MOISTURE_RANGE_M3_M3,
     PENETROMETER_RANGE_MPA,
     TOPSOIL_DEPTH_RANGE_CM,
 )
@@ -18,7 +17,7 @@ from tree.attributes import (
     TreeAttributes,
 )
 
-CHANNEL_SCHEMA = "v1"
+CHANNEL_SCHEMA = "v2"
 CHANNEL_NAMES = (
     "penetrometer", "bulk_density", "moisture", "sand_fraction", "clay_fraction",
     "pipe_mask", "pavement_mask", "obstacle_distance", "prior",
@@ -55,7 +54,7 @@ def build_input_tensor(field: SoilField, masks: ObstacleMasks, tree: TreeAttribu
     channels = (
         field.penetrometer_mpa / PENETROMETER_RANGE_MPA[1],
         normalise(field.bulk_density_g_cm3, BULK_DENSITY_RANGE_G_CM3),
-        field.moisture_m3_m3 / MOISTURE_RANGE_M3_M3[1],
+        field.available_water_fraction,
         field.sand_fraction,
         field.clay_fraction,
         masks.pipe.astype(np.float32),

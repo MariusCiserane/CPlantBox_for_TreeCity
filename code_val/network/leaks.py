@@ -23,8 +23,9 @@ PLUME_REACH_ALONG_TRENCH_CM = 150.0
 PLUME_REACH_DOWNWARD_CM = 120.0
 PLUME_REACH_UPWARD_CM = 50.0
 PLUME_REACH_LATERAL_CM = 60.0
-MINOR_LEAK_MOISTURE_M3_M3 = 0.30
-MAJOR_LEAK_MOISTURE_M3_M3 = 0.45
+# A plume brings the soil back to field capacity; beyond that the water drains away.
+MINOR_LEAK_WATER_FRACTION = 0.75
+MAJOR_LEAK_WATER_FRACTION = 1.0
 MINOR_LEAK_REACH_SCALE = 0.6
 MAJOR_LEAK_REACH_SCALE = 1.0
 
@@ -34,7 +35,7 @@ class JointLeak:
     name: str
     origin_cm: tuple[float, float, float]
     along_unit: tuple[float, float]
-    moisture_m3_m3: float
+    available_water_fraction: float
     reach_scale: float
 
 
@@ -65,7 +66,7 @@ def draw_joint_leak(run: UtilityRun, rng: np.random.Generator) -> tuple:
         name=f"{run.name}_leak",
         origin_cm=tuple(float(value) for value in origin),
         along_unit=tuple(float(value) for value in tangent / np.linalg.norm(tangent)),
-        moisture_m3_m3=MAJOR_LEAK_MOISTURE_M3_M3 if is_major else MINOR_LEAK_MOISTURE_M3_M3,
+        available_water_fraction=MAJOR_LEAK_WATER_FRACTION if is_major else MINOR_LEAK_WATER_FRACTION,
         reach_scale=MAJOR_LEAK_REACH_SCALE if is_major else MINOR_LEAK_REACH_SCALE,
     ),)
 

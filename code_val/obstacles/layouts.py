@@ -16,7 +16,7 @@ PIPE_OFFSET_RANGE_CM = (100.0, 400.0)
 
 SLAB_DEPTH_CM = 15.0
 ROAD_BASE_DEPTH_CM = 50.0
-ROAD_BASE = RoadBase(penetrometer_mpa=3.5, bulk_density_g_cm3=1.90, moisture_m3_m3=0.12)
+ROAD_BASE = RoadBase(penetrometer_mpa=3.5, bulk_density_g_cm3=1.90, available_water_fraction=0.15)
 SIDEWALK_START_RANGE_CM = (100.0, 400.0)
 TREE_PIT_HALF_SIZE_RANGE_CM = (50.0, 150.0)
 

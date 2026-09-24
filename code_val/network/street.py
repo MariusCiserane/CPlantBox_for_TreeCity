@@ -25,9 +25,9 @@ TRENCH_WORKING_SPACE_CM = 30.0
 BEDDING_DEPTH_RANGE_CM = (10.0, 15.0)
 SURROUND_COVER_RANGE_CM = (15.0, 30.0)
 
-RECOMPACTED_BACKFILL = SoilHorizon(3.0, 1.95, 0.11, 0.82, 0.08)
-LOOSE_BACKFILL = SoilHorizon(0.7, 1.30, 0.22, 0.55, 0.15)
-PIPE_SURROUND = SoilHorizon(0.5, 1.50, 0.13, 0.95, 0.01)
+RECOMPACTED_BACKFILL = SoilHorizon(3.0, 1.95, 0.25, 0.82, 0.08)
+LOOSE_BACKFILL = SoilHorizon(0.7, 1.30, 0.50, 0.55, 0.15)
+PIPE_SURROUND = SoilHorizon(0.5, 1.50, 0.20, 0.95, 0.01)
 
 # LeakageStatusValue du paquet utilities CityGML de Team 3.
 NO_LEAK, MINOR_LEAK, MAJOR_LEAK = "none", "minor", "major"

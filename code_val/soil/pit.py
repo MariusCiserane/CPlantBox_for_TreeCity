@@ -30,7 +30,7 @@ def apply_planting_pit(ambient: SoilField, pit: SoilField, mask: np.ndarray) -> 
     return SoilField(
         penetrometer_mpa=np.where(mask, pit.penetrometer_mpa, ambient.penetrometer_mpa),
         bulk_density_g_cm3=np.where(mask, pit.bulk_density_g_cm3, ambient.bulk_density_g_cm3),
-        moisture_m3_m3=np.where(mask, pit.moisture_m3_m3, ambient.moisture_m3_m3),
+        available_water_fraction=np.where(mask, pit.available_water_fraction, ambient.available_water_fraction),
         sand_fraction=np.where(mask, pit.sand_fraction, ambient.sand_fraction),
         clay_fraction=np.where(mask, pit.clay_fraction, ambient.clay_fraction),
     )

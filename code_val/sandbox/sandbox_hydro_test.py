@@ -14,7 +14,7 @@ from obstacles.layouts import NO_OBSTACLE, TREE_PIT_HALF_SIZE_RANGE_CM, draw_obs
 from soil.archetypes import PIT_SUBSTRATE_ARCHETYPE, find_archetype
 from soil.field import build_soil_field
 from soil.growth_response import apply_bengough, apply_water_stress, compute_growth_scale
-from soil.hydraulics import build_pressure_head_field
+from soil.hydraulics import build_water_fields
 from soil.pit import TREE_PIT_DEPTH_RANGE_CM, apply_planting_pit, build_pit_mask
 from soil.profile import draw_soil_profile
 from soil.wet_spots import WetSpot, apply_wet_spots, build_control_shell_mask, build_wet_spot_mask
@@ -43,7 +43,7 @@ def build_scene(identifier: int, grid: VoxelGrid):
         float(rng.uniform(*TREE_PIT_HALF_SIZE_RANGE_CM)),
         float(rng.uniform(*TREE_PIT_DEPTH_RANGE_CM)), grid))
     field = apply_wet_spots(field, WET_SPOTS, grid)
-    pressure_head = build_pressure_head_field(field)
+    pressure_head = build_water_fields(field).pressure_head_cm
     return field, pressure_head, build_growth_geometry(draw_obstacle_layout(NO_OBSTACLE, rng), grid)
 
 
@@ -76,9 +76,9 @@ def summarise_ratio(pairs: np.ndarray, inside_voxels: int, shell_voxels: int,
 
 def run_archetype(identifier: int, grid: VoxelGrid) -> None:
     field, pressure_head, geometry = build_scene(identifier, grid)
-    water = apply_water_stress(pressure_head)
+    water = apply_water_stress(field.available_water_fraction)
     mechanical = apply_bengough(field.penetrometer_mpa)
-    growth_scale = compute_growth_scale(field.penetrometer_mpa, pressure_head)
+    growth_scale = compute_growth_scale(field.penetrometer_mpa, field.available_water_fraction)
     elongation_grid = build_soil_grid(growth_scale, grid)
     water_grid = build_soil_grid(water, grid)
     masks = {spot.name: (build_wet_spot_mask(spot, grid), build_control_shell_mask(spot, grid))

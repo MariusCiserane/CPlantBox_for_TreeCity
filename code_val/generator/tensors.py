@@ -18,15 +18,14 @@ from dataset.tensors import (CROWN_DEPTH_RANGE_M, DBH_RANGE_CM, HEIGHT_RANGE_M, 
                              build_prior, normalise)
 from generator.environment import CLEARANCE_CLIP_CM
 from generator.scene import TREE_PIT_RADIUS_RANGE_CM, SceneConfiguration
-from soil.archetypes import (BULK_DENSITY_RANGE_G_CM3, MOISTURE_RANGE_M3_M3,
-                             PENETROMETER_RANGE_MPA)
+from soil.archetypes import BULK_DENSITY_RANGE_G_CM3, PENETROMETER_RANGE_MPA
 from soil.pit import TREE_PIT_DEPTH_RANGE_CM
 from grid import VoxelGrid
 from tree.attributes import (AGE_RANGE_YEARS, ARCHITECTURE_OF_SPECIES, ARCHITECTURE_SLOTS,
                              SPECIES_SLOTS)
 
-CHANNEL_SCHEMA = "v2"
-CHANNEL_NAMES = ("penetrometer", "bulk_density", "moisture", "sand_fraction", "clay_fraction",
+CHANNEL_SCHEMA = "v3"
+CHANNEL_NAMES = ("penetrometer", "bulk_density", "available_water", "sand_fraction", "clay_fraction",
                  "water_scale", "growth_scale", "pipe_fraction", "pipe_clearance",
                  "backfill_fraction", "surround_fraction", "leak_plume", "pit_mask", "depth",
                  "prior")
@@ -44,7 +43,7 @@ def build_input_tensor(environment, configuration: SceneConfiguration,
     channels = (
         field.penetrometer_mpa / PENETROMETER_RANGE_MPA[1],
         normalise(field.bulk_density_g_cm3, BULK_DENSITY_RANGE_G_CM3),
-        field.moisture_m3_m3 / MOISTURE_RANGE_M3_M3[1],
+        field.available_water_fraction,
         field.sand_fraction,
         field.clay_fraction,
         environment.water_scale,

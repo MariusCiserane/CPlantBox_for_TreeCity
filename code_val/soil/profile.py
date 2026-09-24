@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from soil.archetypes import (BULK_DENSITY_RANGE_G_CM3, MOISTURE_RANGE_M3_M3, PENETROMETER_RANGE_MPA, TEXTURE_FRACTION_RANGE, TOPSOIL_DEPTH_RANGE_CM, SoilArchetype, SoilHorizon)
+from soil.archetypes import (AVAILABLE_WATER_RANGE, BULK_DENSITY_RANGE_G_CM3, PENETROMETER_RANGE_MPA, TEXTURE_FRACTION_RANGE, TOPSOIL_DEPTH_RANGE_CM, SoilArchetype, SoilHorizon)
 
 RELATIVE_JITTER = 0.15
 DEPTH_JITTER_CM = 10.0
@@ -34,7 +34,7 @@ def jitter_horizon(horizon: SoilHorizon, rng: np.random.Generator) -> SoilHorizo
     return SoilHorizon(
         penetrometer_mpa=jitter_value(horizon.penetrometer_mpa, PENETROMETER_RANGE_MPA, rng),
         bulk_density_g_cm3=jitter_value(horizon.bulk_density_g_cm3, BULK_DENSITY_RANGE_G_CM3, rng),
-        moisture_m3_m3=jitter_value(horizon.moisture_m3_m3, MOISTURE_RANGE_M3_M3, rng),
+        available_water_fraction=jitter_value(horizon.available_water_fraction, AVAILABLE_WATER_RANGE, rng),
         sand_fraction=sand,
         clay_fraction=clay,
     )

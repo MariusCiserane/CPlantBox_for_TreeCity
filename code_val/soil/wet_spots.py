@@ -4,10 +4,10 @@ from dataclasses import dataclass, replace
 import numpy as np
 
 from grid import VoxelGrid
-from soil.archetypes import MOISTURE_RANGE_M3_M3
+from soil.archetypes import AVAILABLE_WATER_RANGE
 from soil.field import SoilField
 
-SATURATED_MOISTURE_M3_M3 = MOISTURE_RANGE_M3_M3[1]
+FULL_RESERVE_FRACTION = AVAILABLE_WATER_RANGE[1]
 
 
 @dataclass(frozen=True)
@@ -17,7 +17,7 @@ class WetSpot:
     bearing_degrees: float
     distance_cm: float
     radius_cm: float
-    moisture_m3_m3: float = SATURATED_MOISTURE_M3_M3
+    available_water_fraction: float = FULL_RESERVE_FRACTION
 
 
 def build_wet_spot_mask(spot: WetSpot, grid: VoxelGrid) -> np.ndarray:
@@ -31,10 +31,10 @@ def build_wet_spot_mask(spot: WetSpot, grid: VoxelGrid) -> np.ndarray:
 
 
 def apply_wet_spots(field: SoilField, spots: tuple[WetSpot, ...], grid: VoxelGrid) -> SoilField:
-    moisture = field.moisture_m3_m3.copy()
+    fraction = field.available_water_fraction.copy()
     for spot in spots:
-        moisture = np.where(build_wet_spot_mask(spot, grid), spot.moisture_m3_m3, moisture)
-    return replace(field, moisture_m3_m3=moisture.astype(np.float32))
+        fraction = np.where(build_wet_spot_mask(spot, grid), spot.available_water_fraction, fraction)
+    return replace(field, available_water_fraction=fraction.astype(np.float32))
 
 
 def build_wet_spot_field(spots: tuple[WetSpot, ...], grid: VoxelGrid) -> np.ndarray:

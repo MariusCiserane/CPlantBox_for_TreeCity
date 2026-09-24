@@ -8,7 +8,7 @@ from dataclasses import replace
 
 import numpy as np
 
-from soil.field import SoilField, apply_moisture_to_resistance
+from soil.field import SoilField, apply_water_to_resistance
 
 
 def apply_leaks(field: SoilField, sources: tuple[tuple[np.ndarray, float], ...],
@@ -20,8 +20,8 @@ def apply_leaks(field: SoilField, sources: tuple[tuple[np.ndarray, float], ...],
     Rescaling the resistance here is what stops a leak from reaching the water half of f_se
     while f_sa and the mechanical half never noticed.
     """
-    moisture = field.moisture_m3_m3
-    for ramp, target_moisture_m3_m3 in sources:
-        moisture = moisture + (target_moisture_m3_m3 - moisture) * ramp
-    wetted = replace(field, moisture_m3_m3=moisture.astype(np.float32))
-    return apply_moisture_to_resistance(wetted, field.moisture_m3_m3, natural_share)
+    fraction = field.available_water_fraction
+    for ramp, target_fraction in sources:
+        fraction = fraction + (target_fraction - fraction) * ramp
+    wetted = replace(field, available_water_fraction=fraction.astype(np.float32))
+    return apply_water_to_resistance(wetted, field.available_water_fraction, natural_share)

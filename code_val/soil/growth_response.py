@@ -1,15 +1,17 @@
 """Turn soil resistance and water status into the elongation scale CPlantBox reads.
 
+Both responses are piecewise linear on a quantity that is already comparable across soils:
+penetration resistance in MPa, and the share of the available water capacity that is left.
 """
 import numpy as np
 
 FREE_GROWTH_RESISTANCE_MPA = 0.5
 STOPPED_GROWTH_RESISTANCE_MPA = 2.5
 
-HALF_ELONGATION_SUCTION_CM = 5100.0
-WATER_STRESS_SHARPNESS = 2.0
+# Below this share of the available water capacity the reserve stops being freely extractable.
+# The transpiration literature places the equivalent threshold at 0.3 to 0.4 across species.
+WATER_STRESS_THRESHOLD = 0.40
 MINIMUM_WATER_SCALE = 0.05
-SMALLEST_SUCTION_CM = 1.0
 MINIMUM_ANGLE_SCALE = 0.35
 
 
@@ -20,15 +22,15 @@ def apply_bengough(penetrometer_mpa: np.ndarray) -> np.ndarray:
     return np.clip(unimpeded, 0.0, 1.0)
 
 
-def apply_water_stress(pressure_head_cm: np.ndarray) -> np.ndarray:
-    """Response curve around the potential that halves elongation at half the suction."""
-    suction = np.maximum(np.abs(pressure_head_cm), SMALLEST_SUCTION_CM)
-    unimpeded = 1.0 / (1.0 + (suction / HALF_ELONGATION_SUCTION_CM) ** WATER_STRESS_SHARPNESS)
+def apply_water_stress(available_water_fraction: np.ndarray) -> np.ndarray:
+    """Full speed while the reserve is above the threshold, then a linear fall to the floor."""
+    unimpeded = available_water_fraction / WATER_STRESS_THRESHOLD
     return np.clip(unimpeded, MINIMUM_WATER_SCALE, 1.0)
 
 
-def compute_growth_scale(penetrometer_mpa: np.ndarray, pressure_head_cm: np.ndarray) -> np.ndarray:
-    return (apply_bengough(penetrometer_mpa)* apply_water_stress(pressure_head_cm)).astype(np.float32)
+def compute_growth_scale(penetrometer_mpa: np.ndarray, available_water_fraction: np.ndarray) -> np.ndarray:
+    return (apply_bengough(penetrometer_mpa)
+            * apply_water_stress(available_water_fraction)).astype(np.float32)
 
 
 def compute_angle_scale(penetrometer_mpa: np.ndarray) -> np.ndarray:

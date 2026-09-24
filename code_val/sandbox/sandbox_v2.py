@@ -25,7 +25,7 @@ from soil.field import build_soil_field
 from soil.fill import apply_fills, measure_natural_share
 from soil.growth_response import (apply_bengough, apply_water_stress, compute_angle_scale,
                                   compute_growth_scale)
-from soil.hydraulics import build_pressure_head_field
+from soil.hydraulics import build_water_fields
 from soil.leak import apply_leaks
 from soil.pit import TREE_PIT_DEPTH_RANGE_CM, apply_planting_pit, build_pit_mask
 from soil.profile import draw_soil_profile
@@ -92,8 +92,8 @@ def build_soil_v2(profile, scene, shapes, coverages, sources, grid, rng):
     field = apply_fills(field, tuple(horizon for _, horizon in shapes.fills), coverages)
     field = apply_leaks(field, sources, measure_natural_share(coverages, grid.shape))
 
-    pressure_head = build_pressure_head_field(field)
-    return field, pressure_head, compute_growth_scale(field.penetrometer_mpa, pressure_head)
+    return (field, build_water_fields(field).pressure_head_cm,
+            compute_growth_scale(field.penetrometer_mpa, field.available_water_fraction))
 
 
 def build_soil_v1(profile, scene, shapes, coverages, sources, grid, rng):
@@ -102,7 +102,8 @@ def build_soil_v1(profile, scene, shapes, coverages, sources, grid, rng):
     field = apply_fills(field, tuple(horizon for _, horizon in shapes.fills), coverages)
     field = apply_leaks(field, sources, measure_natural_share(coverages, grid.shape))
     pressure_head = sandbox_v1.build_pressure_head_field(field, profile, grid)
-    return field, pressure_head, sandbox_v1.compute_growth_scale(field.penetrometer_mpa, pressure_head)
+    return (field, pressure_head,
+            sandbox_v1.compute_growth_scale(field.penetrometer_mpa, field.available_water_fraction))
 
 
 def run_scene(archetype_identifier: int, grid: VoxelGrid, build_soil, directory: Path,is_scale_angle: bool, is_hydro: bool) -> None:
@@ -117,7 +118,7 @@ def run_scene(archetype_identifier: int, grid: VoxelGrid, build_soil, directory:
  
     street_leaks = build_scene_leaks(scene.utilities, scene_rng)
     shapes = build_scene_shapes(scene, grid)
-    sources = tuple((build_plume_ramp(leak, grid), leak.moisture_m3_m3) for leak in street_leaks)
+    sources = tuple((build_plume_ramp(leak, grid), leak.available_water_fraction) for leak in street_leaks)
 
     coverages = tuple(build_coverage(shape, grid) for shape, _ in shapes.fills)
 
@@ -125,7 +126,7 @@ def run_scene(archetype_identifier: int, grid: VoxelGrid, build_soil, directory:
 
     #---- MECHANICAL -----
     mechanical = apply_bengough(field.penetrometer_mpa)
-    water = apply_water_stress(pressure_head)
+    water = apply_water_stress(field.available_water_fraction)
 
     #---- HOOKS -----
     elongation_grid = build_soil_grid(growth_scale, grid)

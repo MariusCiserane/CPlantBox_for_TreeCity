@@ -28,7 +28,7 @@ from network.walls import build_street_geometry
 from soil.field import build_mosaic_field, build_soil_field
 from soil.fill import apply_fills, measure_natural_share
 from soil.growth_response import apply_water_stress, compute_growth_scale
-from soil.hydraulics import build_pressure_head_field
+from soil.hydraulics import build_water_fields
 from soil.leak import apply_leaks
 from soil.mosaic import build_patch_weights
 from soil.pit import apply_planting_pit, build_pit_mask
@@ -39,6 +39,7 @@ CLEARANCE_CLIP_CM = 300.0
 @dataclass
 class SceneEnvironment:
     field: object
+    moisture_m3_m3: np.ndarray
     pressure_head: np.ndarray
     growth_scale: np.ndarray
     water_scale: np.ndarray
@@ -78,7 +79,7 @@ def build_soil(configuration: SceneConfiguration, grid: VoxelGrid, shapes, cover
                                                             configuration.pit_depth_cm, grid))
 
     field = apply_fills(field, tuple(horizon for _, horizon in shapes.fills), coverages)
-    sources = tuple((build_plume_ramp(leak, grid), leak.moisture_m3_m3)
+    sources = tuple((build_plume_ramp(leak, grid), leak.available_water_fraction)
                     for leak in configuration.leaks)
     natural_share = measure_natural_share(coverages, grid.shape)
     return apply_leaks(field, sources, natural_share), sources, natural_share
@@ -92,9 +93,9 @@ def build_environment(configuration: SceneConfiguration, grid: VoxelGrid) -> Sce
     weights = build_patch_weights(configuration.soil, grid)
     field, sources, natural_share = build_soil(configuration, grid, shapes, coverages, weights)
 
-    pressure_head = build_pressure_head_field(field)
-    growth_scale = compute_growth_scale(field.penetrometer_mpa, pressure_head)
-    water_scale = apply_water_stress(pressure_head).astype(np.float32)
+    water = build_water_fields(field)
+    growth_scale = compute_growth_scale(field.penetrometer_mpa, field.available_water_fraction)
+    water_scale = apply_water_stress(field.available_water_fraction).astype(np.float32)
 
     utility_count = len(configuration.street.utilities)
     pipe_fraction = np.clip(np.sum(coverages[:utility_count], axis=0), 0.0, 1.0) if coverages \
@@ -107,7 +108,8 @@ def build_environment(configuration: SceneConfiguration, grid: VoxelGrid) -> Sce
 
     return SceneEnvironment(
         field=field,
-        pressure_head=pressure_head,
+        moisture_m3_m3=water.moisture_m3_m3,
+        pressure_head=water.pressure_head_cm,
         growth_scale=growth_scale,
         water_scale=water_scale,
         pipe_fraction=pipe_fraction.astype(np.float32),

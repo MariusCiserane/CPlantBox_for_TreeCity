@@ -14,7 +14,6 @@ from obstacles.layouts import ROAD_BASE
 from obstacles.masks import build_obstacle_masks
 from soil.field import apply_road_base_override, build_soil_field
 from soil.growth_response import compute_growth_scale
-from soil.hydraulics import build_pressure_head_field
 from soil.pit import apply_planting_pit, build_pit_mask
 from tree.growth import build_soil_grid, grow_root_system
 
@@ -40,8 +39,7 @@ def build_soil_environment(configuration: Configuration, grid: VoxelGrid):
         build_pit_mask(configuration.pit_radius_cm, configuration.pit_depth_cm, grid))
     masks = build_obstacle_masks(configuration.obstacles, grid)
     field = apply_road_base_override(field, masks.road_base, ROAD_BASE)
-    pressure_head = build_pressure_head_field(field)
-    return field, masks, compute_growth_scale(field.penetrometer_mpa, pressure_head)
+    return field, masks, compute_growth_scale(field.penetrometer_mpa, field.available_water_fraction)
 
 
 def build_vtp_path(directory: Optional[Path], identifier: int, run: int) -> Optional[Path]:
