@@ -22,7 +22,7 @@ from soil.archetypes import (
     TEXTURE_FRACTION_RANGE,
     SoilHorizon,
 )
-from soil.field import SoilField, build_channel, build_smooth_noise, build_topsoil_mask
+from soil.field import NOISE_AMPLITUDE, SoilField, build_smooth_noise
 from soil.growth_response import apply_bengough, apply_water_stress
 from soil.hydraulics import convert_moisture_to_pressure_head
 from soil.profile import SoilProfile
@@ -30,6 +30,17 @@ from soil.rosetta_batch import LOG_BASE, ROSETTA_VERSION
 
 FRACTION_TO_PERCENT = 100.0
 LEGACY_MINIMUM_MECHANICAL_SCALE = 0.05
+
+
+def build_topsoil_mask(profile: SoilProfile, grid: VoxelGrid) -> np.ndarray:
+    """Un seul profil pour toute la scene : v1 ne connait pas la mosaique."""
+    depths = grid.measure_layer_depths_cm()[:, None, None]
+    return np.broadcast_to(depths < profile.topsoil_depth_cm, grid.shape)
+
+
+def build_channel(topsoil_value, subsoil_value, topsoil_mask, bounds, noise) -> np.ndarray:
+    base = np.where(topsoil_mask, topsoil_value, subsoil_value)
+    return np.clip(base * (1.0 + NOISE_AMPLITUDE * noise), bounds[0], bounds[1]).astype(np.float32)
 
 
 def build_soil_field(profile: SoilProfile, grid: VoxelGrid, rng: np.random.Generator) -> SoilField:

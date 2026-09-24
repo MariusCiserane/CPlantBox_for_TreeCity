@@ -111,13 +111,10 @@ def run_scene(archetype_identifier: int, grid: VoxelGrid, build_soil, directory:
     rng = np.random.default_rng([SANDBOX_SEED, archetype_identifier])
     profile = draw_soil_profile(find_archetype(archetype_identifier), rng)
 
-   # ---- SCENE -----
-    # Seeded without the archetype: every soil meets the same pipes, the same trenches, the same
-    # pit and the same leaks, so a difference between two scenes can only come from the soil.
-    # The dataset is where the scene varies.
+    # ---- SCENE -----
     scene_rng = np.random.default_rng(SANDBOX_SEED)
     scene = draw_street_scene(float(scene_rng.uniform(*TREE_PIT_HALF_SIZE_RANGE_CM)),float(scene_rng.uniform(*TREE_PIT_DEPTH_RANGE_CM)),grid.half_width_cm, scene_rng)
-
+ 
     street_leaks = build_scene_leaks(scene.utilities, scene_rng)
     shapes = build_scene_shapes(scene, grid)
     sources = tuple((build_plume_ramp(leak, grid), leak.moisture_m3_m3) for leak in street_leaks)
@@ -138,17 +135,14 @@ def run_scene(archetype_identifier: int, grid: VoxelGrid, build_soil, directory:
 
     growth_started = time.perf_counter()
 
-    # CPlantBox builds the tropism callbacks in initialize(), reading the geometry it holds at that
-    # instant.
     geometry = build_street_geometry(shapes, grid)
-    segment_counts, depths, occupancies, intrusions = grow_repeatedly(
-        geometry, elongation_grid, angle_grid, water_lookup, shapes, grid,
-        directory / f"{profile.archetype_name}.vtp")
+    segment_counts, depths, occupancies, intrusions = grow_repeatedly( geometry, elongation_grid, angle_grid, water_lookup, shapes, grid, directory / f"{profile.archetype_name}.vtp")
 
     growth_seconds = time.perf_counter() - growth_started
 
     # Compute occupany voxels grid
     ensemble = compute_occupancy_probability(occupancies)
+
     mean_radius_cm, mean_depth_cm = measure_occupancy_shape(ensemble.probability, grid)
     scene_fields = {"f_se": growth_scale, "bengough": mechanical, "eau": water,
                     "psi": pressure_head, "occupancy": ensemble.probability,
