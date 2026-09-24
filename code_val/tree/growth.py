@@ -90,7 +90,7 @@ def extract_root_system(plant: pb.Plant) -> RootSystem:
     return RootSystem(segments, subtypes)
 
 
-def grow_root_system(geometry, elongation_grid, seed: int, age_years: float, vtp_path: Optional[Path] = None, time_step_days: float = TIME_STEP_DAYS, angle_grid: Optional[pb.EquidistantGrid3D] = None, water_lookup: Optional[pb.SoilLookUp] = None) -> RootSystem:
+def grow_plant(geometry, elongation_grid, seed: int, age_years: float, vtp_path: Optional[Path] = None, time_step_days: float = TIME_STEP_DAYS, angle_grid: Optional[pb.EquidistantGrid3D] = None, water_lookup: Optional[pb.SoilLookUp] = None) -> pb.Plant:
     plant = pb.Plant()
     plant.readParameters(str(XML_PATH))
     plant.setSeed(seed)
@@ -106,4 +106,9 @@ def grow_root_system(geometry, elongation_grid, seed: int, age_years: float, vtp
     if vtp_path is not None:
         vtp_path.parent.mkdir(parents=True, exist_ok=True)
         plant.write(str(vtp_path))
-    return extract_root_system(plant)
+    return plant
+
+
+def grow_root_system(geometry, elongation_grid, seed: int, age_years: float, vtp_path: Optional[Path] = None, time_step_days: float = TIME_STEP_DAYS, angle_grid: Optional[pb.EquidistantGrid3D] = None, water_lookup: Optional[pb.SoilLookUp] = None) -> RootSystem:
+    return extract_root_system(grow_plant(geometry, elongation_grid, seed, age_years, vtp_path,
+                                          time_step_days, angle_grid, water_lookup))
