@@ -1,4 +1,4 @@
-"""Genere le dataset v2 : une scene par configuration, en parallele et reprenable.
+"""Genere le dataset v3 : une scene par configuration, en parallele et reprenable.
 
 Une scene deja ecrite est ignoree, donc on peut interrompre et relancer. Le plan d'experience
 est note dans design.json a la premiere execution et une relance avec d'autres reglages est
@@ -19,8 +19,8 @@ from network.walls import PIPE_EXCLUSION_MARGIN_CM
 from secondary_growth.parameters import SecondaryGrowthParameters
 from tree.growth import XML_PATH
 
-DATASET_DIRECTORY = Path(__file__).resolve().parent / "dataset_v2_runs"
-PILOT_DIRECTORY = Path(__file__).resolve().parent / "pilot_v2"
+DATASET_DIRECTORY = Path(__file__).resolve().parent / "dataset_v3"
+PILOT_DIRECTORY = Path(__file__).resolve().parent / "pilot_v3"
 PILOT_SCENES = 20
 VTP_SUBDIRECTORY = "vtp"
 GRID = VoxelGrid(34, 64, 64, 15.0, 9.0)
@@ -51,6 +51,7 @@ def produce_scene(task: tuple) -> str:
             f"  age {configuration.tree.age_years:5.1f} ans"
             f"  segments {diagnostics['segments_mean']:7.0f}"
             f"  cible {diagnostics['mean_probability']:.5f}"
+            f" (major {diagnostics['mean_probability_major']:.5f})"
             f"  intrusions {diagnostics['intrusions'] or 'aucune'}"
             f"  {diagnostics['runtime_seconds']:5.1f} s")
 
@@ -62,6 +63,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--runs", type=int, default=MONTE_CARLO_RUNS)
     parser.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     parser.add_argument("--vtp", action="store_true", help="ecrire aussi le vtp du premier tirage")
+    parser.add_argument("--output", type=Path, default=None,
+                        help="dossier de sortie (remplace dataset_v3/ ou pilot_v3/)")
     return parser.parse_args()
 
 
@@ -71,7 +74,12 @@ def main() -> None:
         "la marge d'exclusion ne couvre pas le plus grand pas de croissance du XML")
 
     scenes = draw_scenes(arguments.scenes, GRID, arguments.runs)
-    directory = PILOT_DIRECTORY if arguments.pilot else DATASET_DIRECTORY
+    if arguments.output is not None:
+        directory = arguments.output.resolve()
+    elif arguments.pilot:
+        directory = PILOT_DIRECTORY
+    else:
+        directory = DATASET_DIRECTORY
     if arguments.pilot:
         scenes = scenes[::max(1, len(scenes) // PILOT_SCENES)][:PILOT_SCENES]
 

@@ -20,9 +20,11 @@ Each step is one file, and each takes the previous one's output.
 2. **`profile.py::draw_soil_profile` — jitter, do not copy.** Draws a concrete profile *around*
    an archetype: ±15 % per channel, ±10 cm on the horizon depth, with sand + clay held under 0.95
    so the texture stays a real texture.
-3. **`mosaic.py::draw_soil_mosaic` — several archetypes in one domain (v2 only).**
+3. **`mosaic.py::draw_soil_mosaic` — several archetypes in one domain (v2 and v3).**
    An urban fill is not one profile copied everywhere; it is materials tipped side by side.
-   2 to 4 patches, each with its own profile and its own horizon depth. A patch's weight at a
+   1 to 4 patches, each with its own profile and its own horizon depth. A single patch — a
+   laterally uniform soil — falls in one scene out of four since v3: the inference contract
+   accepts it, so the network has to have seen it. A patch's weight at a
    point is a softmax of the distance to its seed: weights sum to 1 everywhere with no
    renormalisation, and the softmax temperature *is* the transition width in centimetres. The
    distance is perturbed by a correlated field, otherwise the boundaries would be the bisectors
@@ -60,7 +62,8 @@ Each step is one file, and each takes the previous one's output.
    how many voxels there are.
 9. **`growth_response.py` — the number CPlantBox reads.**
    `f_se = bengough(resistance) × water_stress(available water fraction)`; `f_sa`, the lateral
-   insertion angle scale, is built from the mechanical term alone. Both responses are piecewise
+   insertion angle scale, is built from the mechanical term alone and is wired into the growth
+   since v3 (v2 read `f_se` only). Both responses are piecewise
    linear on a quantity that is already comparable across soils, so neither needs a retention
    curve to be read.
 
@@ -93,7 +96,7 @@ sandbox, to give a tropism something it can demonstrably follow.
 | Available water capacity | between field capacity (−100 cm) and wilting point (−15 000 cm) |
 | `f_sa` | floor 0.35 — a lateral that cannot push sideways emerges closer to its parent's heading |
 | Water → resistance | exponent −2, scale clipped to [0.25, 2.0], applied only to the natural share |
-| Patches | 2 to 4, seeds at least 250 cm apart, transition 40–90 cm (or 20 cm, 25 % of the time) |
+| Patches | 1 to 4 (2 to 4 in v2), seeds at least 250 cm apart, transition 40–90 cm (or 20 cm, 25 % of the time) |
 | Rosetta batch | rounded to 1 % texture and 0.02 g/cm³, coarsened until under 12 000 distinct records |
 | Pit | radius 50–150 cm, depth 60–100 cm |
 

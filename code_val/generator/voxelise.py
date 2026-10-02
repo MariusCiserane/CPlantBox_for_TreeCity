@@ -9,6 +9,11 @@ voxel - donc une racine posee sur une face deborde chez le voisin et la meme rac
 ne deborde pas. Une dilatation morphologique par classe de rayon gonflerait au contraire tout
 voxel marque de la meme facon, apres avoir jete la position sous-voxel.
 
+Chaque cible existe aussi par classe de diametre reel, apres croissance secondaire : major des
+2 cm, le seuil de detection d'un GPR, et minor pour tout le reste des racines structurales, sans
+borne basse. major U minor redonne donc exactement la cible entiere. Le classement se fait par
+echantillon, si bien qu'une racine effilee change de classe le long de son trajet.
+
 Le volume est accumule sur toutes les racines, fines comprises : c'est un canal de biomasse, et
 les racines fines en portent.
 """
@@ -22,6 +27,9 @@ from grid import VoxelGrid
 
 SAMPLE_STEP_CM = 1.0
 RADIUS_BIN_EDGES_CM = (0.0, 0.75, 2.0, 4.0, 8.0, 15.0)
+MAJOR_DIAMETER_CM = 2.0
+DIAMETER_CLASSES = ("major", "minor")
+OCCUPANCY_KINDS = ("radius", "centreline")
 
 
 class Polysegments(NamedTuple):
@@ -112,6 +120,25 @@ def stamp_radius(samples: Samples, grid: VoxelGrid) -> np.ndarray:
                       & (neighbour[2] >= 0) & (neighbour[2] < grid.column_cells) & reached)
             occupancy[neighbour[0][within], neighbour[1][within], neighbour[2][within]] = True
     return occupancy
+
+
+def split_by_diameter(samples: Samples) -> dict:
+    thick = 2.0 * samples.radii >= MAJOR_DIAMETER_CM
+    return {"major": Samples(*(field[thick] for field in samples)),
+            "minor": Samples(*(field[~thick] for field in samples))}
+
+
+def stamp_classes(structural: Samples, grid: VoxelGrid) -> tuple:
+    """Les deux occupations de chaque classe, puis leur union : le tampon est un OU par
+    echantillon, donc l'union des classes est exactement la cible calculee d'un seul bloc."""
+    occupancies, outside = {}, 0
+    for name, samples in split_by_diameter(structural).items():
+        occupancies[f"centreline_{name}"], missed = stamp_centreline(samples, grid)
+        occupancies[f"radius_{name}"] = stamp_radius(samples, grid)
+        outside += missed
+    for kind in OCCUPANCY_KINDS:
+        occupancies[kind] = np.logical_or(*(occupancies[f"{kind}_{name}"] for name in DIAMETER_CLASSES))
+    return occupancies, outside
 
 
 def accumulate_volume(samples: Samples, grid: VoxelGrid) -> np.ndarray:

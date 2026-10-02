@@ -13,7 +13,7 @@ from soil.pit import TREE_PIT_DEPTH_RANGE_CM
 from soil.profile import SoilProfile, draw_soil_profile
 from tree.attributes import PICEA_ABIES, TreeAttributes, draw_tree_attributes
 
-SCHEMA_VERSION = "v2"
+SCHEMA_VERSION = "v3"
 MASTER_SEED = 20260922
 SCENE_COUNT = 2000
 MONTE_CARLO_RUNS = 20

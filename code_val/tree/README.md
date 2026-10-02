@@ -13,7 +13,7 @@ actually runs CPlantBox.
 2. **`growth.py::build_soil_grid` / `build_interpolated_soil_grid`** — push a numpy grid into a
    native CPlantBox lookup. Two flavours, for two different consumers (see below).
 3. **`growth.py::assign_soil_hooks`** — attaches `f_se` (and optionally `f_sa`) to every root
-   parameter set.
+   parameter set. The v3 generator always wires both; v2 wired `f_se` only.
 4. **`growth.py::assign_hydrotropism`** — `setSoil()` plus `tropismT = 3` on the hydrotropic
    subtypes. Must run **before** `initialize()`.
 5. **`growth.py::grow_plant`** — `readParameters` → `setSeed` → `setGeometry` → hooks →
@@ -70,6 +70,10 @@ actually runs CPlantBox.
   subtype 6, which is structural and therefore visible in the target.
 - **The soil lookup is constant inside a 15 × 15 × 9 cm cell** for `f_se`. A root crossing a cell
   sees one value for its whole crossing.
+- **A blocking soil is not blocking on its border.** `f_se` is read at the apex *before* it
+  advances, so a root finishes its last step inside the first cell where `f_se = 0`. Measured on
+  dataset v2: 5 % of the target mass sits in cells with `f_se < 1e-3`, 99.9 % of it one cell away
+  from growable soil. A hard mask must be eroded by that one cell (`hybrid/masks.py`).
 - **Allometries are the specification's, not measurements.** DBH, height and crown depth are
   placeholders.
 - **Beyond 60 years the XML is extrapolated.** `simulationTime` is 21 900 days while ages are

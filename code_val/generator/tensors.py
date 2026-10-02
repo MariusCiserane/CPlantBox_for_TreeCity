@@ -11,32 +11,38 @@ masque ne pouvait dessiner qu'un escalier.
 f_se et le facteur hydrique sont volontairement redondants avec les cinq premiers canaux : ce
 sont les champs exacts que CPlantBox a lus, donc le reseau n'a pas a redecouvrir la chaine
 Rosetta, van Genuchten et Bengough pour atteindre le label.
+
+Le tenseur est un sur-ensemble : les 15 canaux de la baseline, puis les 4 que le modele hybride
+ajoute. Chaque modele y lit sa liste par nom, ce qui permet de re-entrainer la baseline sur les
+memes scenes que le modele hybride : sans cela, comparer leurs Dice ne dirait rien.
 """
 import numpy as np
 
 from dataset.tensors import (CROWN_DEPTH_RANGE_M, DBH_RANGE_CM, HEIGHT_RANGE_M, build_one_hot,
-                             build_prior, normalise)
+                             normalise)
 from generator.environment import CLEARANCE_CLIP_CM
 from generator.scene import TREE_PIT_RADIUS_RANGE_CM, SceneConfiguration
+from hybrid.channels import ADDED_CHANNEL_NAMES, build_added_channels, select_hybrid_channel_names
 from soil.archetypes import BULK_DENSITY_RANGE_G_CM3, PENETROMETER_RANGE_MPA
 from soil.pit import TREE_PIT_DEPTH_RANGE_CM
 from grid import VoxelGrid
 from tree.attributes import (AGE_RANGE_YEARS, ARCHITECTURE_OF_SPECIES, ARCHITECTURE_SLOTS,
                              SPECIES_SLOTS)
 
-CHANNEL_SCHEMA = "v3"
-CHANNEL_NAMES = ("penetrometer", "bulk_density", "available_water", "sand_fraction", "clay_fraction",
-                 "water_scale", "growth_scale", "pipe_fraction", "pipe_clearance",
-                 "backfill_fraction", "surround_fraction", "leak_plume", "pit_mask", "depth",
-                 "prior")
+CHANNEL_SCHEMA = "v4"
+BASELINE_CHANNEL_NAMES = ("penetrometer", "bulk_density", "available_water", "sand_fraction",
+                          "clay_fraction", "water_scale", "growth_scale", "pipe_fraction",
+                          "pipe_clearance", "backfill_fraction", "surround_fraction", "leak_plume",
+                          "pit_mask", "depth", "prior")
+CHANNEL_NAMES = BASELINE_CHANNEL_NAMES + ADDED_CHANNEL_NAMES
+HYBRID_CHANNEL_NAMES = select_hybrid_channel_names(CHANNEL_NAMES)
 FILM_NAMES = SPECIES_SLOTS + ARCHITECTURE_SLOTS + ("age_years", "dbh_cm", "height_m",
                                                    "crown_depth_m", "pit_radius_cm",
                                                    "pit_depth_cm", "utility_count")
 UTILITY_COUNT_SCALE = 10.0
 
 
-def build_input_tensor(environment, configuration: SceneConfiguration,
-                       grid: VoxelGrid) -> np.ndarray:
+def build_input_tensor(environment, prior: np.ndarray, grid: VoxelGrid) -> np.ndarray:
     field = environment.field
     depths = np.broadcast_to(grid.measure_layer_depths_cm()[:, None, None] / grid.depth_cm,
                              grid.shape)
@@ -55,9 +61,10 @@ def build_input_tensor(environment, configuration: SceneConfiguration,
         environment.leak_plume,
         environment.pit_mask.astype(np.float32),
         depths,
-        build_prior(configuration.tree, grid),
+        prior,
     )
-    return np.stack(channels).astype(np.float32)
+    added = build_added_channels(environment.bengough, environment.water_scale, grid)
+    return np.concatenate([np.stack(channels), added]).astype(np.float32)
 
 
 def build_film_vector(configuration: SceneConfiguration) -> np.ndarray:

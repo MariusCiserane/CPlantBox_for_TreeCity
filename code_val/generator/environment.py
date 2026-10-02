@@ -27,7 +27,8 @@ from network.shapes import build_scene_shapes
 from network.walls import build_street_geometry
 from soil.field import build_mosaic_field, build_soil_field
 from soil.fill import apply_fills, measure_natural_share
-from soil.growth_response import apply_water_stress, compute_growth_scale
+from soil.growth_response import (apply_bengough, apply_water_stress, compute_angle_scale,
+                                  compute_growth_scale)
 from soil.hydraulics import build_water_fields
 from soil.leak import apply_leaks
 from soil.mosaic import build_patch_weights
@@ -43,6 +44,8 @@ class SceneEnvironment:
     pressure_head: np.ndarray
     growth_scale: np.ndarray
     water_scale: np.ndarray
+    bengough: np.ndarray
+    angle_scale: np.ndarray
     pipe_fraction: np.ndarray
     surround_fraction: np.ndarray
     backfill_fraction: np.ndarray
@@ -53,6 +56,7 @@ class SceneEnvironment:
     patch_labels: np.ndarray
     lumens: tuple
     elongation_grid: object
+    angle_grid: object
     water_lookup: object
     geometry: object
 
@@ -96,6 +100,7 @@ def build_environment(configuration: SceneConfiguration, grid: VoxelGrid) -> Sce
     water = build_water_fields(field)
     growth_scale = compute_growth_scale(field.penetrometer_mpa, field.available_water_fraction)
     water_scale = apply_water_stress(field.available_water_fraction).astype(np.float32)
+    angle_scale = compute_angle_scale(field.penetrometer_mpa)
 
     utility_count = len(configuration.street.utilities)
     pipe_fraction = np.clip(np.sum(coverages[:utility_count], axis=0), 0.0, 1.0) if coverages \
@@ -112,6 +117,8 @@ def build_environment(configuration: SceneConfiguration, grid: VoxelGrid) -> Sce
         pressure_head=water.pressure_head_cm,
         growth_scale=growth_scale,
         water_scale=water_scale,
+        bengough=apply_bengough(field.penetrometer_mpa).astype(np.float32),
+        angle_scale=angle_scale,
         pipe_fraction=pipe_fraction.astype(np.float32),
         surround_fraction=surround_fraction.astype(np.float32),
         backfill_fraction=(1.0 - natural_share).astype(np.float32),
@@ -122,6 +129,7 @@ def build_environment(configuration: SceneConfiguration, grid: VoxelGrid) -> Sce
         patch_labels=np.broadcast_to(weights.argmax(axis=0) + 1.0, grid.shape).astype(np.float32),
         lumens=shapes.lumens,
         elongation_grid=build_soil_grid(growth_scale, grid),
+        angle_grid=build_soil_grid(angle_scale, grid),
         water_lookup=build_interpolated_soil_grid(water_scale, grid),
         geometry=build_street_geometry(shapes.lumens, grid),
     )

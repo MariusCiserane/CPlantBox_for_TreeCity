@@ -4,22 +4,26 @@ Grows *Picea abies* root systems in CPlantBox inside a synthetic urban scene —
 planting pit, buried utility networks, joint leaks — and turns them into voxel grids a 3D U-Net
 can be trained on: **where a structural root is likely to be**, given the soil and the street.
 
-Two generators live here side by side. **Do not refactor v1 while working on v2**: v1 is frozen
-on purpose and must keep running.
+Two generators live here side by side. **Do not refactor v1 while working on v3**: v1 is frozen
+on purpose and must keep running. v2 is no longer a generator but a dataset on disk: `generator/`
+has evolved into v3 and does not reproduce it (see the v2 column).
 
-| | **v1** | **v2** |
-|---|---|---|
-| Entry point | `build_dataset.py` | `build_dataset_v2.py` |
-| Scene code | `dataset/` + `obstacles/` | `generator/` + `network/` |
-| Soil | one profile per scene | mosaic of 2–4 archetypes |
-| Obstacles | 4 hand-made families, axis-aligned pipes | 0–10 real networks, any bearing, elbows, tees |
-| Design | 10 archetypes × 4 families × 9 draws = 360 configs × 50 runs | 2 000 scenes × 20 runs |
-| Target | centreline occupancy | radius occupancy **and** centreline, plus a volume channel |
-| Input channels | 9 | 15 |
+| | **v1** | **v2** (on disk, 2026-09-22) | **v3** |
+|---|---|---|---|
+| Entry point | `build_dataset.py` | — (`build_dataset_v2_hybrid.py` derives from it) | `build_dataset_v3.py` |
+| Scene code | `dataset/` + `obstacles/` | `generator/` at `1b52cfb` | `generator/` + `network/` + `hybrid/` |
+| Soil water | volumetric θ | volumetric θ → ψ → sigmoid stress | share of the available water capacity |
+| Soil | one profile per scene | mosaic of 2–4 archetypes | mosaic of 1–4 archetypes |
+| Soil hooks | `f_se` | `f_se` | `f_se` and `f_sa` |
+| Obstacles | 4 hand-made families, axis-aligned pipes | 0–10 real networks, any bearing | same as v2 |
+| Design | 360 configs × 50 runs | 2 000 scenes × 20 runs | 2 000 scenes × 20 runs |
+| Target | centreline occupancy | radius **and** centreline, plus volume | same, plus *major* / *minor* diameter classes |
+| Input channels | 9 | 15 (17 in `dataset_v2_hybrid/`) | 19 = 15 baseline + 4 hybrid |
+| Metadata | descriptor | descriptor | descriptor + a `site_request` per scene |
 
 ---
 
-## The pipeline, step by step (v2)
+## The pipeline, step by step (v3)
 
 Each step is one module; read the code in this order.
 
@@ -43,16 +47,19 @@ Each step is one module; read the code in this order.
    as a share of the available water capacity, not as a volumetric moisture: see
    [soil/README.md](soil/README.md).
 6. **Grow** — `tree/growth.py`
-   20 seeds per scene. `f_se` scales elongation at every apex, the interpolated water field
-   drives hydrotropism on subtypes 5 and 6, and the pipe walls are an SDF difference.
+   20 seeds per scene. `f_se` scales elongation at every apex, `f_sa` narrows the insertion angle
+   of laterals born in hard soil, the interpolated water field drives hydrotropism on subtypes 5
+   and 6, and the pipe walls are an SDF difference.
 7. **Correct the radii** — `secondary_growth/`
    CPlantBox freezes a root's radius at birth. The Murray profile, anchored on the age law at the
    collar, restores a tapered, age-dependent radius per node.
 8. **Voxelise** — `generator/voxelise.py`
-   Two occupancy grids (centreline and true radius) plus an accumulated root-volume channel.
+   Centreline and true-radius occupancy, each split into *major* (diameter ≥ 2 cm) and *minor*,
+   plus an accumulated root-volume channel.
 9. **Assemble and write** — `generator/tensors.py`, `generator/writer.py`
-   15 input channels, a FiLM conditioning vector, the `.npz`, the `.json` descriptor and a `.vti`
-   for ParaView.
+   19 input channels, `prior_v2`, a FiLM conditioning vector, the `.npz`, the `.json` descriptor,
+   a `.vti` for ParaView, and the scene rewritten in the inference contract
+   (`generator/site_request.py`, `site_request.schema.json`).
 
 The v1 path is the same skeleton with fewer steps: `dataset/configuration.py` →
 `dataset/example.py` → `dataset/occupancy.py` → `dataset/tensors.py` → `dataset/writer.py`.
@@ -64,8 +71,9 @@ The v1 path is the same skeleton with fewer steps: `dataset/configuration.py` �
 | Folder | What lives there | README |
 |---|---|---|
 | `dataset/` | v1 example builder: configurations, Monte Carlo, 9 channels, writer | [dataset/README.md](dataset/README.md) |
-| `generator/` | v2 scene builder: scene draw, environment, voxelisation, 15 channels, writer | [generator/README.md](generator/README.md) |
-| `network/` | v2 buried networks: free-orientation pipes, trenches, coverage, walls, leaks | [network/README.md](network/README.md) |
+| `generator/` | v3 scene builder: scene draw, environment, voxelisation by diameter class, 19 channels, site request, writer | [generator/README.md](generator/README.md) |
+| `hybrid/` | what the hybrid model adds: 4 channels, `prior_v2`, mask zones, and the measures that decide phases B and C | [hybrid/README.md](hybrid/README.md) |
+| `network/` | v2/v3 buried networks: free-orientation pipes, trenches, coverage, walls, leaks | [network/README.md](network/README.md) |
 | `obstacles/` | v1 obstacle families, **and** the axis-aligned street prototype `network/` replaced | [obstacles/README.md](obstacles/README.md) |
 | `sandbox/` | throwaway experiments that measure one mechanism at a time | [sandbox/README.md](sandbox/README.md) |
 | `secondary_growth/` | post-hoc root thickening, the radius CPlantBox will not give you | [secondary_growth/README.md](secondary_growth/README.md) |
@@ -78,10 +86,15 @@ Shared, at the root:
 | File | Responsibility |
 |---|---|
 | `grid.py` | the voxel grid — 34 × 64 × 64, cell 15 × 15 × 9 cm, extent ±480 × ±480 cm and 306 cm deep, depth index 0 at the surface and increasing downward |
-| `paraview.py` | writes any dict of grids as one binary `.vti` |
+| `paraview.py` | writes any dict of grids as one binary `.vti`, and reads it back |
+| `versions.py` | the current git commit, stamped into every file written |
+| `site_request.schema.json` | the inference contract (`site_request/v2`), with the training ranges; `site_request.example.json` |
 | `apply_secondary_growth.py` | CLI: re-radius an existing `.vtp` |
 | `visualise_example.py` | CLI: one self-contained HTML page per v1 example |
-| `build_dataset.py`, `build_dataset_v2.py` | CLI, parallelisation, resumability |
+| `build_dataset.py`, `build_dataset_v3.py` | CLI, parallelisation, resumability |
+| `build_dataset_v2_hybrid.py` | CLI: dataset v2 → 17 hybrid channels + `prior_v2`, no simulation |
+| `measure_hybrid_readiness.py` | CLI: Dice of the priors and target mass under the masks, on any hybrid-format folder |
+| `measure_training_ranges.py` | CLI: validates every site request of a dataset and rewrites the contract's training ranges |
 
 ---
 
@@ -105,11 +118,19 @@ docker run --rm -it \
 Then:
 
 ```bash
-python3 code_val/build_dataset_v2.py --pilot           # 20 scenes spread over the design
-python3 code_val/build_dataset_v2.py                   # the 2000 scenes
-python3 code_val/build_dataset_v2.py --scenes 50 --runs 5 --vtp
+python3 code_val/build_dataset_v3.py --pilot           # 20 scenes spread over the design
+python3 code_val/build_dataset_v3.py                   # the 2000 scenes, about 1 h 15 on 23 workers, 20 GB
+python3 code_val/build_dataset_v3.py --scenes 50 --runs 5 --vtp
 python3 code_val/build_dataset.py --pilot              # v1, 5 configurations
 python3 code_val/sandbox/sandbox_v2.py --hydro         # one scene per archetype, to look at
+```
+
+The three analysis CLIs need only numpy, scipy and jsonschema, and run on the host:
+
+```bash
+python code_val/measure_training_ranges.py                         # after a v3 run
+python code_val/measure_hybrid_readiness.py --dataset code_val/dataset_v3
+python code_val/build_dataset_v2_hybrid.py                         # once, for the v2 files
 ```
 
 Both generators are **resumable**: a scene already on disk is skipped. Both write a `design.json`
@@ -123,13 +144,14 @@ Without `--workers` the pool uses `os.cpu_count() - 1` **as seen inside the cont
 
 ## Output
 
-`dataset_v2_runs/`, or `pilot_v2/` with `--pilot`. Three files per scene:
+`dataset_v3/`, or `pilot_v3/` with `--pilot`. Four files per scene:
 
 | File | Contents |
 |---|---|
-| `scene_00001.npz` | `inputs` (15, 34, 64, 64) · `film` · `target` (radius) · `target_centreline` · `root_volume` · both `hit_count`s · both packed run stacks · the first run's polylines |
-| `scene_00001.json` | the whole configuration, the grid, the secondary-growth parameters, the git commit, the diagnostics |
-| `scene_00001.vti` | 11 voxel fields for ParaView, to open next to the `.vtp` |
+| `scene_00001.npz` | `inputs` (19, 34, 64, 64) · `channel_names` · `film` · `prior_v2` · `target` (radius), `target_centreline`, `target_major`, `target_minor` · `root_volume` · six `hit_count`s · four packed run stacks · the first run's polylines |
+| `scene_00001.json` | the whole configuration, the grid, the three channel lists, the secondary-growth parameters, the git commit, the diagnostics |
+| `scene_00001.vti` | 14 voxel fields for ParaView, to open next to the `.vtp` |
+| `site_request/scene_00001.json` | the scene as a user would have entered it, valid against `site_request.schema.json` |
 
 The `.json` is written **last**, through a temporary file: its presence is what certifies that a
 scene is complete. Individual Monte Carlo runs are kept bit-packed, so a probability map can be
@@ -156,5 +178,7 @@ recomputed over any subset of runs without simulating again.
   as a factor of the experimental design, with its own FiLM slots.
 - **The `prior` channel is a strong radial prior** — exactly what a network copies while ignoring
   the soil. Train once with it and once without.
-- **No surface pavement in v2**: what reaches the roots is the excavation, not the slab above it.
+- **No surface pavement since v2**: what reaches the roots is the excavation, not the slab above it.
+- **Penetration resistance comes from the archetypes**, not from texture and density: the
+  pedotransfer the contract relies on when `penetrometer_mpa` is null is not in the generator.
 - Anything narrower than that is documented in the package README that owns it.

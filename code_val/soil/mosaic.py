@@ -21,7 +21,9 @@ from grid import VoxelGrid
 from soil.archetypes import ARCHETYPES, SoilArchetype
 from soil.profile import SoilProfile, draw_soil_profile
 
-PATCH_COUNT_RANGE = (2, 4)
+# Une patche unique, soit un sol lateralement uniforme, tombe dans une scene sur quatre : le contrat
+# l'accepte en entree, le reseau doit donc l'avoir vu.
+PATCH_COUNT_RANGE = (1, 4)
 PRIMARY_SEED_RADIUS_CM = 200.0
 SEED_MINIMUM_SEPARATION_CM = 250.0
 SEED_ATTEMPTS = 30
