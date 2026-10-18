@@ -116,7 +116,7 @@ def rename_vtp(directory: Path, identifier: int, stem: str, kept: int) -> None:
 
 def run_scene(archetype_identifier: int, tree_xml: str, directory: Path, options: GrowthOptions,
               with_street: bool, street_class: str, runs: int, age_years: float, seed: int,
-              write_npz: bool) -> None:
+              write_npz: bool, raw_vtp: bool) -> None:
     configuration, street_seed = build_sandbox_configuration(
         archetype_identifier, tree_xml, age_years, runs, with_street, street_class, seed)
     parameters = secondary_growth_for(configuration.tree.species)
@@ -132,7 +132,7 @@ def run_scene(archetype_identifier: int, tree_xml: str, directory: Path, options
     directory.mkdir(parents=True, exist_ok=True)
     started = time.perf_counter()
     example = build_scene(configuration, GRID, parameters, vtp_directory=directory, options=options,
-                          vtp_runs=VTP_RUNS_KEPT, observer=observe)
+                          vtp_runs=VTP_RUNS_KEPT, observer=observe, raw_vtp=raw_vtp)
     elapsed = time.perf_counter() - started
     rename_vtp(directory, archetype_identifier, stem, VTP_RUNS_KEPT)
 
@@ -175,6 +175,8 @@ def parse_arguments() -> argparse.Namespace:
                         help="density class of the street (ignored with --no-street)")
     parser.add_argument("--no-f-sa", action="store_true", help="do not wire f_sa (the dataset does)")
     parser.add_argument("--no-hydro", action="store_true", help="do not wire the hydrotropism (the dataset does)")
+    parser.add_argument("--vtp-raw", action="store_true",
+                        help="leave the .vtp as CPlantBox wrote it, without the secondary-growth radii")
     parser.add_argument("--npz", action="store_true", help="also write the files of the dataset (npz/ folder)")
     parser.add_argument("--runs", type=int, default=SANDBOX_RUNS, help="trees per scene")
     parser.add_argument("--age", type=float, default=SANDBOX_AGE_YEARS, help="tree age [years]")
@@ -201,7 +203,7 @@ def main() -> None:
         for identifier in arguments.archetype:
             run_scene(identifier, tree.name, parent_directory / tree.stem, options,
                       not arguments.no_street, arguments.street_class, arguments.runs,
-                      arguments.age, arguments.seed, arguments.npz)
+                      arguments.age, arguments.seed, arguments.npz, arguments.vtp_raw)
 
 
 if __name__ == "__main__":

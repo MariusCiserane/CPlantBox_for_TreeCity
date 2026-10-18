@@ -19,7 +19,8 @@ from grid import VoxelGrid
 from hybrid.prior import LEAK_PRIOR_BOOST, build_prior_v2
 from network.intrusion import find_intrusions
 from secondary_growth.parameters import SecondaryGrowthParameters
-from secondary_growth.radii import build_final_radii
+from secondary_growth.polydata import read_polydata, write_polydata
+from secondary_growth.radii import build_final_radii, build_radius_arrays
 from tree.growth import grow_plant
 from tree.species import secondary_growth_for
 
@@ -54,13 +55,23 @@ def measure_maximum_depth_cm(starts: np.ndarray, ends: np.ndarray) -> float:
     return float(-min(starts[:, 2].min(), ends[:, 2].min()))
 
 
+def thicken_vtp_file(path: Path, parameters: SecondaryGrowthParameters) -> None:
+    """Add the per-node radius arrays (radius_secondary, radius_age, ...) to a .vtp written by CPlantBox,
+    exactly as apply_secondary_growth.py does, so the file needs no second pass."""
+    polydata = read_polydata(path)
+    arrays, _ = build_radius_arrays(polydata, parameters)
+    write_polydata(path, polydata, arrays)
+
+
 def grow_once(configuration: SceneConfiguration, environment, grid: VoxelGrid, seed: int,
               parameters: SecondaryGrowthParameters, vtp_path,
-              options: GrowthOptions = GrowthOptions()) -> tuple:
+              options: GrowthOptions = GrowthOptions(), raw_vtp: bool = False) -> tuple:
     plant = grow_plant(environment.geometry, environment.elongation_grid, seed,
                        configuration.tree.age_years, Path(configuration.tree_xml), vtp_path,
                        angle_grid=environment.angle_grid if options.use_angle_scale else None,
                        water_lookup=environment.water_lookup if options.use_hydrotropism else None)
+    if vtp_path is not None and not raw_vtp:
+        thicken_vtp_file(Path(vtp_path), parameters)
     polydata = extract_polydata(plant)
     radii, _ = build_final_radii(polydata, parameters)
     segments = build_polysegments(polydata, radii)
@@ -90,9 +101,12 @@ def build_fields(environment, hit_counts: dict, runs: int) -> dict:
 def build_scene(configuration: SceneConfiguration, grid: VoxelGrid,
                 parameters: Optional[SecondaryGrowthParameters] = None,
                 vtp_directory: Path = None, options: GrowthOptions = GrowthOptions(),
-                vtp_runs: int = VTP_RUNS_PER_SCENE, observer: Optional[Callable] = None) -> Example:
+                vtp_runs: int = VTP_RUNS_PER_SCENE, observer: Optional[Callable] = None,
+                raw_vtp: bool = False) -> Example:
     """parameters: secondary growth, by default the one of the species of the tree.
     vtp_runs: how many runs write their .vtp, when vtp_directory is given.
+    raw_vtp: leave the .vtp as CPlantBox wrote it (primary radii); by default it also carries the
+    secondary-growth radii (radius_secondary, ...). The rest of the scene always uses them.
     observer(run_index, polydata, radii, segments): called after each run, to measure the roots
     without a second loop (run_index starts at 0)."""
     if parameters is None:
@@ -110,7 +124,7 @@ def build_scene(configuration: SceneConfiguration, grid: VoxelGrid,
         path = None if vtp_directory is None or run > vtp_runs else \
             vtp_directory / f"scene_{configuration.identifier:05d}_run_{run:02d}.vtp"
         occupancies, volume, polydata, radii, segments, missed = grow_once(
-            configuration, environment, grid, seed, parameters, path, options)
+            configuration, environment, grid, seed, parameters, path, options, raw_vtp)
         if observer is not None:
             observer(run - 1, polydata, radii, segments)
 

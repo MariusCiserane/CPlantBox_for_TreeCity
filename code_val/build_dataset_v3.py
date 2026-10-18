@@ -44,14 +44,14 @@ def guard_design(directory: Path, scenes: int, runs: int, tree_xml: str) -> None
 
 
 def produce_scene(task: tuple) -> str:
-    configuration, directory, write_vtp = task
+    configuration, directory, write_vtp, raw_vtp = task
     label = Path(configuration.tree_xml).stem
     if is_complete(directory, configuration.identifier):
         return f"{label}  scene {configuration.identifier:5d} deja presente, ignoree"
 
     parameters = secondary_growth_for(configuration.tree.species)
     example = build_scene(configuration, GRID, parameters,
-                          directory / VTP_SUBDIRECTORY if write_vtp else None)
+                          directory / VTP_SUBDIRECTORY if write_vtp else None, raw_vtp=raw_vtp)
     write_scene(directory, configuration, example, GRID, parameters)
 
     diagnostics = example.diagnostics
@@ -74,6 +74,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--runs", type=int, default=MONTE_CARLO_RUNS)
     parser.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
     parser.add_argument("--vtp", action="store_true", help="ecrire aussi le vtp du premier tirage")
+    parser.add_argument("--vtp-raw", action="store_true",
+                        help="vtp tel que CPlantBox l'ecrit, sans les rayons de croissance secondaire")
     parser.add_argument("--output", type=Path, default=None,
                         help="dossier de sortie (remplace dataset_v3/ ou pilot_v3/), "
                              "un sous-dossier par arbre y est cree")
@@ -104,7 +106,7 @@ def main() -> None:
         directory = base / Path(tree_xml).stem
         directory.mkdir(parents=True, exist_ok=True)
         guard_design(directory, arguments.scenes, arguments.runs, tree_xml)
-        tasks += [(configuration, directory, arguments.vtp or arguments.pilot)
+        tasks += [(configuration, directory, arguments.vtp or arguments.pilot, arguments.vtp_raw)
                   for configuration in scenes]
 
     with Pool(arguments.workers) as pool:
