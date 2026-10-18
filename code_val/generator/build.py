@@ -4,6 +4,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable, Optional
 
 import numpy as np
 
@@ -20,9 +21,18 @@ from network.intrusion import find_intrusions
 from secondary_growth.parameters import SecondaryGrowthParameters
 from secondary_growth.radii import build_final_radii
 from tree.growth import grow_plant
+from tree.species import secondary_growth_for
 
 VTP_RUNS_PER_SCENE = 1
 PACKED_OCCUPANCIES = ("radius", "centreline", "radius_major", "radius_minor")
+
+
+@dataclass(frozen=True)
+class GrowthOptions:
+    """Which soil hooks CPlantBox reads. The dataset always wires both of them; the sandbox can
+    switch one off to isolate its effect."""
+    use_angle_scale: bool = True
+    use_hydrotropism: bool = True
 
 
 @dataclass
@@ -45,10 +55,12 @@ def measure_maximum_depth_cm(starts: np.ndarray, ends: np.ndarray) -> float:
 
 
 def grow_once(configuration: SceneConfiguration, environment, grid: VoxelGrid, seed: int,
-              parameters: SecondaryGrowthParameters, vtp_path) -> tuple:
+              parameters: SecondaryGrowthParameters, vtp_path,
+              options: GrowthOptions = GrowthOptions()) -> tuple:
     plant = grow_plant(environment.geometry, environment.elongation_grid, seed,
-                       configuration.tree.age_years, vtp_path,
-                       angle_grid=environment.angle_grid, water_lookup=environment.water_lookup)
+                       configuration.tree.age_years, Path(configuration.tree_xml), vtp_path,
+                       angle_grid=environment.angle_grid if options.use_angle_scale else None,
+                       water_lookup=environment.water_lookup if options.use_hydrotropism else None)
     polydata = extract_polydata(plant)
     radii, _ = build_final_radii(polydata, parameters)
     segments = build_polysegments(polydata, radii)
@@ -76,8 +88,15 @@ def build_fields(environment, hit_counts: dict, runs: int) -> dict:
 
 
 def build_scene(configuration: SceneConfiguration, grid: VoxelGrid,
-                parameters: SecondaryGrowthParameters = SecondaryGrowthParameters(),
-                vtp_directory: Path = None) -> Example:
+                parameters: Optional[SecondaryGrowthParameters] = None,
+                vtp_directory: Path = None, options: GrowthOptions = GrowthOptions(),
+                vtp_runs: int = VTP_RUNS_PER_SCENE, observer: Optional[Callable] = None) -> Example:
+    """parameters: secondary growth, by default the one of the species of the tree.
+    vtp_runs: how many runs write their .vtp, when vtp_directory is given.
+    observer(run_index, polydata, radii, segments): called after each run, to measure the roots
+    without a second loop (run_index starts at 0)."""
+    if parameters is None:
+        parameters = secondary_growth_for(configuration.tree.species)
     started = time.perf_counter()
     environment = build_environment(configuration, grid)
     soil_seconds = time.perf_counter() - started
@@ -88,10 +107,12 @@ def build_scene(configuration: SceneConfiguration, grid: VoxelGrid,
 
     growth_started = time.perf_counter()
     for run, seed in enumerate(configuration.root_seeds, start=1):
-        path = None if vtp_directory is None or run > VTP_RUNS_PER_SCENE else \
+        path = None if vtp_directory is None or run > vtp_runs else \
             vtp_directory / f"scene_{configuration.identifier:05d}_run_{run:02d}.vtp"
         occupancies, volume, polydata, radii, segments, missed = grow_once(
-            configuration, environment, grid, seed, parameters, path)
+            configuration, environment, grid, seed, parameters, path, options)
+        if observer is not None:
+            observer(run - 1, polydata, radii, segments)
 
         for name, occupancy in occupancies.items():
             stacks[name].append(occupancy)
@@ -124,7 +145,10 @@ def build_scene(configuration: SceneConfiguration, grid: VoxelGrid,
         root_volume=np.mean(volumes, axis=0).astype(np.float32),
         polylines=polylines,
         fields=build_fields(environment, hit_counts, runs),
-        diagnostics={"runtime_seconds": round(time.perf_counter() - started, 1),
+        diagnostics={"tree_xml": configuration.tree_xml,
+                     "growth_options": {"angle_scale": options.use_angle_scale,
+                                        "hydrotropism": options.use_hydrotropism},
+                     "runtime_seconds": round(time.perf_counter() - started, 1),
                      "soil_seconds": round(soil_seconds, 1),
                      "growth_seconds": round(growth_seconds, 1),
                      "segments_mean": float(np.mean(segment_counts)),
