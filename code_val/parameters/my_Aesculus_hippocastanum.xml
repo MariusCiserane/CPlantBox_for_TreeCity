@@ -127,7 +127,7 @@ TROPISMES (tropismT, tropismN, tropismS), d'apres tropism.cpp et tropism.h
 	</root>
 	<!--   ST2 : charpentieres obliques exotropes, coeur du systeme, porteuses de fines ST3, de laterales ST6 et de descendantes ST4.   -->
 	<root name="oblique_framework_roots" subType="2">
-		<parameter name="a" value="0.90" dev="0.08"/>
+		<parameter name="a" value="0.10" dev="0.01"/>
 		<parameter name="r" value="0.055" dev="0.011"/>
 		<parameter name="lmax" value="260" dev="75"/>
 		<parameter name="rlt" value="1e+09"/>
@@ -174,7 +174,7 @@ TROPISMES (tropismT, tropismN, tropismS), d'apres tropism.cpp et tropism.h
 	</root>
 	<!--   ST4 : descendantes structurales (sinkers), seules racines franchement verticales, avec des racines profondes ST7 (15 %) a tous les points de ramification.   -->
 	<root name="structural_sinkers" subType="4">
-		<parameter name="a" value="0.65" dev="0.04"/>
+		<parameter name="a" value="0.10" dev="0.01"/>
 		<parameter name="r" value="0.10"/>
 		<parameter name="lmax" value="110" dev="30"/>
 		<parameter name="rlt" value="1e+09"/>
@@ -218,7 +218,7 @@ TROPISMES (tropismT, tropismN, tropismS), d'apres tropism.cpp et tropism.h
 	</root>
 	<!--   ST6 : laterales secondaires plagiotropes, qui etalent le systeme a profondeur moyenne.   -->
 	<root name="exploratory_laterals" subType="6">
-		<parameter name="a" value="0.60" dev="0.03"/>
+		<parameter name="a" value="0.10" dev="0.01"/>
 		<parameter name="r" value="0.07" dev="0.012"/>
 		<!--   lmax = 380 cm : c'est ce sous-type qui donne l'etalement horizontal du systeme. A 520 cm, 33 % des ST6 touchaient le fond de la grille (306 cm) et cumulaient leur longueur dans la derniere couche ; a 380 cm, 19 %.   -->
 		<parameter name="lmax" value="380" dev="120"/>
